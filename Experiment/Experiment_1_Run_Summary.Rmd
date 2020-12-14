@@ -1,0 +1,130 @@
+---
+title: "Run Summary Descriptives"
+author: "Vanessa Ferdinand"
+date: "7/10/2019" # "7/10/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# drag "roundData FINAL.csv" here:
+d <- read.csv("~/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/Data/roundData FINAL.csv")
+```
+
+
+## Runtime info
+
+08:00 Chicago time, July 9, 2019: <br>  Experiment was launched on MTurk, 
+batch name: "vanessa-categorization-2019-pilot 1", and ran on Google App Engine, project name: "categorization298157".
+
+Ran from 08:00-10:48.
+
+08:41 <br> All slots were occupied.  Individual condition had 21/90 slots (23%) still busy, all others read DONE.  Chain condition had 18/45 chains (40%) still busy, all other chains read DONE.
+
+10:25  <br> All slots had been completed and there were 298 HIT submissions. I kept the HIT open a while longer in case there were more people who still needed to submit it.
+
+10:48  <br> I cancelled the HIT.  (Log files showed many people trying to access the experiment and email started filling up with emails from frustrated people who were getting the "experiment full, try back in an hour" message.)
+
+21:33 <br>  Approved all 298 HIT submissions.  There were no scammers.
+
+### Notes
+
+5 people were booted out for not answering the comprehension questions correctly within 3 tries (see bootOut entity in Datastore).
+
+14 people dropped out of the experiment after getting past the consent page.  Only 3 of these left round data in the Datastore.  There were 16 logs of an experiment drop (see staleSlot entity in Datastore) and two of these did successfully complete the experiment - they were the only two entries that went stale while on the final (debriefing) page of the experiment.  Both of them  submitted HITs and their data was successfully saved.  The third dropout with data did not submit a HIT.
+
+Participants spent an average of 23 seconds on the consent page (min 3 sec, max 9 min).  Only 9 of 298 participants spent more than a minute on the consent page.  So we can conclude that they nearly always do the experiment as soon as they click on the link for it.
+
+```{r, echo=F}
+# mean(d$duration_consent)/1000  # for seconds
+# min(d$duration_consent)/1000  
+# max(d$duration_consent)/60000  # for minutes
+```
+
+Participants spent an average of 4 min 23 sec to complete a round.
+
+```{r, echo=F}
+# mean(d$duration_round)/60000
+```
+
+## Data Cleaning
+
+There are two raw data files for this experiment: 
+
+1. the csv downloaded from MTurk (contains their worker ID and completion code)
+1. the csv downloaded from Google Datastore (contains everything else)
+
+Each row in the Datastore download contains all data for one round or one generation. In the Individual condition, several rounds can be from the same participant.  If a participant drops the experiment partway through, their rounds stay in the Datastore.
+
+What "data cleaning" means: remove entries from the Datastore download that do not correspond to participants who finished the experiment.
+
+### Removals summary
+
+The Datastore download contained 300 unique participants.  3 of them did not have an associated HIT submission.  All others did.
+
+s92317745: <br> (chain 17 gen 2) Dropped out in phase 16, server.py detected this and re-ran their slot.
+
+s96918632: <br> (individual) Did 5 rounds and dropped out. Pretty sure this is the data for one person who emailed for a reimbursement & we paid them.
+
+s42995530: <br> (chain 44, gen 8) This person completed the experiment and just didn't enter at HIT.    This chain converged on gen 9.
+
+Ethics question: <br>
+If a person takes your experiment but doesn't collect the money, do you still use the data or not?  
+
+The first two were removed from the final participants data.
+Currently, s42995530 is still in there.
+
+### MTurk HIT submissions summary
+
+298 HITs were submitted.
+
+1 contained an invalid completion code.  This person was paid for the experiment, but removed from our participant pool.
+
+1 contained a typo in the completion code (cU250949s57232), but the correct match was unambiguous (cU250949s57232032).  So I corrected that.
+
+
+## Final Participants
+
+
+```{r cars}
+length(unique(d$participant)) # total number of participants
+
+I <- subset(d,condition=="I")
+length(unique(I$participant))  # number in Individual condition
+
+C <- subset(d,condition=="C")
+length(unique(C$participant))  # number in Chain condition
+```
+
+## Round/Generation Decay Rate
+
+Individual condition: the experiment ended when the participants answers on round t were identical to their answers on round t-1.
+
+Chain condition: the chain ended when the answers of generation t were identical to the answers of generation t-1.
+
+The plots below show how many individuals / chains progressed to x rounds / generations.
+
+```{r r_atrophy, echo=FALSE}
+plot(table(I$round),xlab="rounds",ylab="participants",ylim=c(0,100),main="Number of participants that got through x rounds",las=1)
+```
+
+All 90 participants had 2 rounds.  Only 78 proceeded to round 3, 63 to round 4, etc.  19 participants did 8 rounds.  The experiment code automatically ended after 8 rounds, regardless of whether or not participants had converged.
+
+
+```{r g_atrophy, echo=FALSE}
+plot(table(C$generation),xlab="generations",ylab="participants",ylim=c(0,50),main="Number of chains that got through x generations",las=1)
+```
+
+All 45 chains had 2 generations.  Only 32 proceeded to a 3rd generation, 24 proceeded to a 4th, etc.  1 chain was 11 generations long.
+
+## Implementation success
+
+K so the program I made worked just fine.  The same program controlled the individual and iterated learning (i.e. chain) condition structures.  In the chain condition, it automatically routed participants to the appropriate generations, monitored for dropouts to re-run generations, and closed chains when they reached convergence.  Nothing was done manually.
+
+Among all of the chains, there was only one fork.  Two participants joined chain 11, gen 5, within one second of one another (08:34:17 GMT-0500 and 09:34:16 GMT-0400).  Both produced the same mapping as the input and the chain automatically closed due to convergence.
+
+```{r, echo=F}
+# One fork:
+#table(table(d$parent)) # one parent appears twice: cU614448
+```
+
+All data seems to have been succcessfully written to the Datastore.
