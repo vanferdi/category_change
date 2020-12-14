@@ -1,0 +1,4 @@
+cron:
+- description: "reset status of dropped experiments to available"
+  url: /clear_stales
+  schedule: every 5 minutes

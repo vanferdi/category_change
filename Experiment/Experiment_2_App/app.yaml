@@ -1,0 +1,45 @@
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /
+  static_files: index.html
+  upload: index.html
+
+- url: /js
+  static_dir: js
+
+- url: /assets
+  static_dir: assets
+
+- url: /consent.pdf
+  static_files: consent.pdf
+  upload: consent.pdf
+  http_headers:
+    Content-Type: text/pdf
+    Content-Disposition: "attachment; filename=assets/consent.pdf"
+
+- url: /PLS.pdf
+  static_files: PLS.pdf
+  upload: PLS.pdf
+  http_headers:
+    Content-Type: text/pdf
+    Content-Disposition: "attachment; filename=assets/PLS.pdf"
+
+- url: /test1.jpg
+  static_files: test1.jpg
+  upload: test1.jpg
+  http_headers:
+    Content-Type: image/jpg
+    Content-Disposition: "attachment; filename=assets/test1.jpg"
+
+- url: /test2.jpg
+  static_files: test2.jpg
+  upload: test2.jpg
+  http_headers:
+    Content-Type: image/jpg
+    Content-Disposition: "attachment; filename=assets/test2.jpg"
+
+- url: /.*   # this grabs every other relative url not specified above
+  script: server.app
