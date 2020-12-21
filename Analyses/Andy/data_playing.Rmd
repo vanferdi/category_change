@@ -1,0 +1,840 @@
+---
+title: "Andrew playing with category_change data"
+author: "Andrew"
+date: "16/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# We'll begin by loading up the libraries and data we need, as always.
+# This first chunk just cleans the data and creates smaller, more tractable datasets
+knitr::opts_chunk$set(echo = TRUE)
+
+# loading the libraries
+library(tidyverse)
+library(knitr)
+library(here)
+library(ggplot2)
+library(lme4)
+#library(car)
+library(cowplot)
+library(RColorBrewer)
+library(reshape2)
+#library(AICcmodavg)
+
+# load the raw data
+raw <- read_csv(file=here("../../Data/experiment1_FINAL.csv"))
+# load the dataset Van made where each row is a stimulus item
+drow <- read_csv(file=here("stim_rows.csv"))
+
+# subset to just look at the first 8 iterations
+# there were just a couple iterations in the cultural condition that went over 8
+# we toss those out because no one in the individual condition was allowed to go beyond 8 
+d <- raw 
+d$keep <- 0
+d$keep[d$iteration<9] <- 1
+
+# rename variables and create some useful new ones
+d <- d %>% 
+  mutate(gen = ifelse(condition=="I",round,generation)) %>%
+  mutate(traj = ifelse(condition=="I",str_sub(trajectory,1,5),paste0("s",trajectory,"00"))) %>%
+  mutate(cond = ifelse(condition=="I","individual","culture")) %>%
+  mutate(dist = case_when(distribution=="R" ~ "right",distribution=="L"~"left",
+                          distribution=="U" ~ "uniform")) %>%
+  mutate(skew = ifelse(distribution=="U","no","yes")) %>%
+  select(participant,keep,cond,dist,skew,gen,traj,
+         converged,correct_mapping,produced_mapping,score,N_boundaries,
+         N_boundaries_change,n_label1,n_label1_change) %>%
+  rename(c("generation"="gen","trajectory"="traj","nbound"="N_boundaries",
+           "nbound_change"="N_boundaries_change","nlabel1"="n_label1",
+           "nlabel1_change"="n_label1_change","condition"="cond","distribution"="dist"))
+
+# remove the trajectories that didn't converge, put in dbad
+# also remove the entire trajectory for the ones that took more than 8 iterations to converge
+nt <- unique(d$trajectory)
+for (t in 1:length(nt)) {
+  temp <- d %>% filter(trajectory==nt[t])
+  if (sum(temp$converged)<1 | max(temp$generation>8)) {
+    d$keep[d$trajectory==nt[t]] <- 0
+  }
+}
+
+# convert produced_mapping into columns
+m <- matrix(nrow=nrow(d),ncol=10)
+for (i in 1:nrow(d)) {
+  m[i,] <- as.numeric(strsplit(d$produced_mapping[i],",")[[1]])
+}
+colnames(m) <- c("s1","s2","s3","s4","s5","s6","s7","s8","s9","s10")
+d <- cbind(d,m)
+
+# normalise them so in each trajectory the first word of the last generation is 0
+nt <- unique(d$trajectory)
+for (n in 1:length(nt)) {
+  temp <- d %>% filter(trajectory==nt[n])
+  t <- temp$s1[temp$converged==TRUE]
+  if (length(t)>0) {
+    if (t==1) {
+      d$s1[d$trajectory==nt[n]] <- abs(d$s1[d$trajectory==nt[n]]-1)
+      d$s2[d$trajectory==nt[n]] <- abs(d$s2[d$trajectory==nt[n]]-1)
+      d$s3[d$trajectory==nt[n]] <- abs(d$s3[d$trajectory==nt[n]]-1)
+      d$s4[d$trajectory==nt[n]] <- abs(d$s4[d$trajectory==nt[n]]-1)
+      d$s5[d$trajectory==nt[n]] <- abs(d$s5[d$trajectory==nt[n]]-1)
+      d$s6[d$trajectory==nt[n]] <- abs(d$s6[d$trajectory==nt[n]]-1)
+      d$s7[d$trajectory==nt[n]] <- abs(d$s7[d$trajectory==nt[n]]-1)
+      d$s8[d$trajectory==nt[n]] <- abs(d$s8[d$trajectory==nt[n]]-1)
+      d$s9[d$trajectory==nt[n]] <- abs(d$s9[d$trajectory==nt[n]]-1)
+      d$s10[d$trajectory==nt[n]] <- abs(d$s10[d$trajectory==nt[n]]-1)
+    }    
+  }
+}
+
+# create a variable that is this normalised system
+d$catsys <- NULL
+for (i in 1:nrow(d)) {
+  d$catsys[i] <- paste0(d$s1[i],d$s2[i],d$s3[i],d$s4[i],d$s5[i],
+                        d$s6[i],d$s7[i],d$s8[i],d$s9[i],d$s10[i])
+}
+
+# set up the optimal boundaries
+# for u can calculate it based on just # of label1 there is
+# for l and r, each element in the list is for the next boundary number
+# some boundary numbers have multiple optima. goes up to 8 bc that's max in our dataset
+optl <- list(c(0,0,1,1,1,1,1,1,1,1),  # one boundary
+             c(0,1,1,1,0,0,0,0,0,0),  # two boundaries
+             rbind(c(0,1,1,0,0,1,1,1,1,1),c(0,1,1,1,0,0,0,1,1,1)), # three
+             rbind(c(0,1,0,1,1,1,1,1,1,0),c(0,1,1,0,1,1,1,1,0,0), # four
+               c(0,1,1,1,0,1,1,0,0,0),c(0,1,1,1,1,0,1,0,0,0)),
+             rbind(c(0,1,1,0,1,1,0,0,1,1),c(0,1,1,0,1,1,1,0,0,1),c(0,1,1,1,0,1,0,0,0,1)), # five
+             rbind(c(0,1,1,0,1,1,0,1,1,0),c(0,1,1,0,1,1,1,0,1,0),c(0,1,1,1,0,1,0,0,1,0)), # six
+             rbind(c(0,1,1,0,1,1,0,1,0,1),c(0,1,1,1,0,1,0,1,0,1)), # seven
+             rbind(c(0,1,1,0,1,0,1,0,1,0))) # eight
+optr <- list(c(0,0,0,0,0,0,0,0,1,1), # one boundary
+             c(0,0,0,0,0,0,1,1,1,0), # two boundaries
+             rbind(c(0,0,0,0,0,1,1,0,0,1),c(0,0,0,1,1,1,0,0,0,1)), # three
+             rbind(c(0,1,1,1,1,1,1,0,1,0),c(0,0,1,1,1,1,0,1,1,0), # four
+               c(0,0,0,1,1,0,1,1,1,0),c(0,0,0,1,0,1,1,1,1,0)),
+             rbind(c(0,0,1,1,0,0,1,0,0,1),c(0,1,1,0,0,0,1,0,0,1),c(0,1,1,1,0,1,0,0,0,1)), # five
+             rbind(c(0,1,1,0,1,1,0,1,1,0),c(0,1,0,1,1,1,0,1,1,0),c(0,1,0,0,1,0,1,1,1,0)), # six
+             rbind(c(0,1,0,1,0,0,1,0,0,1),c(0,1,0,1,0,1,0,0,0,1)), # seven
+             rbind(c(0,1,0,1,0,1,0,1,1,0))) # eight
+
+# calculate distance of produced from optimal for that # of boundaries
+d$optu <- NA
+d$optl <- NA
+d$optr <- NA
+for (i in 1:nrow(d)) {
+  vec <- c(d$s1[i],d$s2[i],d$s3[i],d$s4[i],d$s5[i],d$s6[i],d$s7[i],d$s8[i],d$s9[i],d$s10[i])
+  nb <- d$nbound[i]
+  nopt <- nrow(optr[nb][[1]])
+  if (is.null(nopt)) { nopt <- 1 }
+  v <- t(matrix(rep(vec,nopt),ncol=nopt))
+  d$optu[i] <- abs(sum(vec)-5)
+  d$optr[i] <- min(rowSums(optr[nb][[1]]+v==1))
+  d$optl[i] <- min(rowSums(optl[nb][[1]]+v==1))
+}
+
+# calculate the distance from their optimum for that condition
+d <- d %>%
+  mutate(optd = case_when(distribution=="right" ~ optr,distribution=="left"~optl,
+                          distribution=="uniform" ~ optu))
+
+# calculate how much each generation changed from previous
+d$catchange <- NA
+for (i in 1:nrow(d)) {
+  vec <- c(d$s1[i],d$s2[i],d$s3[i],d$s4[i],d$s5[i],d$s6[i],d$s7[i],d$s8[i],d$s9[i],d$s10[i])
+  if (d$generation[i]==1) {
+    old <- as.numeric(strsplit(d$correct_mapping[i],",")[[1]])
+    d$catchange[i] <- 10-sum(vec==old)
+  } else {
+    temp <- d$trajectory==d$trajectory[i] & d$generation==(d$generation[i]-1)
+    oi <- which(temp==TRUE)[[1]]
+    old <- c(d$s1[oi],d$s2[oi],d$s3[oi],d$s4[oi],d$s5[oi],d$s6[oi],
+             d$s7[oi],d$s8[oi],d$s9[oi],d$s10[oi]) 
+    d$catchange[i] <- 10-sum(vec==old)
+  }
+}
+
+# save these datafiles
+dfull <- d                         # contains all data
+dbad <- d %>% filter(keep==0)      # includes chains that didn't converge or >8 iterations
+d <- d %>% filter(keep==1)         # excludes chains that didn't converge or >8 iterations
+write.csv(dfull,"full_cleaned_data.csv",row.names=FALSE)
+write.csv(dbad,"bad_cleaned_data.csv",row.names=FALSE)
+write.csv(d,"cleaned_data.csv",row.names=FALSE)
+
+# split it into six different datasets by condition
+dcr <- d %>% filter(condition=="culture" & distribution=="right")
+dcl <- d %>% filter(condition=="culture" & distribution=="left")
+dcu <- d %>% filter(condition=="culture" & distribution=="uniform")
+dir <- d %>% filter(condition=="individual" & distribution=="right")
+dil <- d %>% filter(condition=="individual" & distribution=="left")
+diu <- d %>% filter(condition=="individual" & distribution=="uniform")
+dc <- d %>% filter(condition=="culture")
+di <- d %>% filter(condition=="individual")
+```
+
+Let's first draw some pictures of each of the trajectories for each chain in each condition. This only shows the ones that converged.
+
+```{r raw, echo=FALSE, fig.height=6, fig.width=6, message=FALSE, warning=FALSE}
+nt <- unique(d$trajectory)
+dil_long <- NULL
+dir_long <- NULL
+diu_long <- NULL
+dcl_long <- NULL
+dcr_long <- NULL
+dcu_long <- NULL
+d_last <- d %>% filter(converged==TRUE)
+d_last$ncats <- NA
+for (n in 1:length(nt)) {
+  temp <- d %>% 
+    filter(trajectory==nt[n]) %>%
+    select(distribution,condition,generation,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10,
+           correct_mapping,produced_mapping)
+  mxg <- max(temp$generation)
+  d_last$ncats[d_last$trajectory==nt[n]] <- length(unique(temp$produced_mapping))
+  firstg <- as.numeric(strsplit(temp$correct_mapping[temp$generation==1],",")[[1]])
+  t <- temp$s1[temp$generation==mxg]
+  if (t==1) {
+    firstg <- as.numeric(abs(firstg-1))
+  }
+  temp <- rbind(temp,c(temp$distribution[1],temp$condition[1],0,firstg,"x","x"))
+  rownames(temp) <- paste0("g",temp$generation) 
+  temp <- temp %>% arrange(desc(generation))
+  if (temp$condition[1]=="culture" & temp$distribution[1]=="right") {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    dcr_long <- rbind(dcr_long,m)
+  } else if (temp$condition[1]=="culture" & temp$distribution[1]=="left") {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    dcl_long <- rbind(dcl_long,m)
+  } else if (temp$condition[1]=="culture" & temp$distribution[1]=="uniform") {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    dcu_long <- rbind(dcu_long,m)
+  } else if (temp$condition[1]=="individual" & temp$distribution[1]=="right") {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    dir_long <- rbind(dir_long,m)
+  } else if (temp$condition[1]=="individual" & temp$distribution[1]=="left") {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    dil_long <- rbind(dil_long,m)
+  } else {
+    temp <- temp %>% select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10)
+    m <- melt(as.matrix(temp))
+    m$id <- nt[n]
+    diu_long <- rbind(diu_long,m)
+  }
+}
+diu_long$value <- as.numeric(diu_long$value)
+diu_long$Var2 <- as.numeric(str_sub(diu_long$Var2,2,2))
+diu_long$Var1 <- as.numeric(str_sub(diu_long$Var1,2,2))
+dir_long$value <- as.numeric(dir_long$value)
+dir_long$Var2 <- as.numeric(str_sub(dir_long$Var2,2,2))
+dir_long$Var1 <- as.numeric(str_sub(dir_long$Var1,2,2))
+dil_long$value <- as.numeric(dil_long$value)
+dil_long$Var2 <- as.numeric(str_sub(dil_long$Var2,2,2))
+dil_long$Var1 <- as.numeric(str_sub(dil_long$Var1,2,2))
+dcu_long$value <- as.numeric(dcu_long$value)
+dcu_long$Var2 <- as.numeric(str_sub(dcu_long$Var2,2,2))
+dcu_long$Var1 <- as.numeric(str_sub(dcu_long$Var1,2,2))
+dcr_long$value <- as.numeric(dcr_long$value)
+dcr_long$Var2 <- as.numeric(str_sub(dcr_long$Var2,2,2))
+dcr_long$Var1 <- as.numeric(str_sub(dcr_long$Var1,2,2))
+dcl_long$value <- as.numeric(dcl_long$value)
+dcl_long$Var2 <- as.numeric(str_sub(dcl_long$Var2,2,2))
+dcl_long$Var1 <- as.numeric(str_sub(dcl_long$Var1,2,2))
+
+  
+ggplot(diu_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Individual, uniform") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+ggplot(dil_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Individual, left") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+ggplot(dir_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Individual, right") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+ggplot(dcu_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Culture, uniform") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+ggplot(dcl_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Culture, left") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+ggplot(dcr_long, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+facet_wrap(vars(id)) +
+scale_y_continuous(breaks=c(2,4,6,8),labels=c("2","4","6","8")) +
+scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+labs(x="stimulus", y="generation",title="Culture, right") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+```
+
+Now let's look at just the final categorisation in each condition.
+
+```{r finalcat, fig.width=8, fig.height=6, echo=FALSE, warning=FALSE, message=FALSE}
+diu_last <- d_last %>% filter(condition=="individual" & distribution=="uniform") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(diu_last) <- diu_last$trajectory
+diu_last <- diu_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+diu_last <- as.matrix(diu_last)
+dium <- melt(diu_last)
+
+piu <- ggplot(dium, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Individual, uniform") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+dil_last <- d_last %>% filter(condition=="individual" & distribution=="left") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(dil_last) <- dil_last$trajectory
+dil_last <- dil_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+dil_last <- as.matrix(dil_last)
+dilm <- melt(dil_last)
+
+pil <- ggplot(dilm, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Individual, left skew") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+dir_last <- d_last %>% filter(condition=="individual" & distribution=="right") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(dir_last) <- dir_last$trajectory
+dir_last <- dir_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+dir_last <- as.matrix(dir_last)
+dirm <- melt(dir_last)
+
+pir <- ggplot(dirm, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Individual, right skew") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+dcu_last <- d_last %>% filter(condition=="culture" & distribution=="uniform") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(dcu_last) <- dcu_last$trajectory
+dcu_last <- dcu_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+dcu_last <- as.matrix(dcu_last)
+dcum <- melt(dcu_last)
+
+pcu <- ggplot(dcum, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Culture, uniform") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+dcl_last <- d_last %>% filter(condition=="culture" & distribution=="left") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(dcl_last) <- dcl_last$trajectory
+dcl_last <- dcl_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+dcl_last <- as.matrix(dcl_last)
+dclm <- melt(dcl_last)
+
+pcl <- ggplot(dclm, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Culture, left skew") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+dcr_last <- d_last %>% filter(condition=="culture" & distribution=="right") %>%
+  select(trajectory,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) 
+rownames(dcr_last) <- dcr_last$trajectory
+dcr_last <- dcr_last %>%
+  select(s1,s2,s3,s4,s5,s6,s7,s8,s9,s10) %>%
+  arrange(s9) %>% arrange(s8) %>% arrange(s7) %>% arrange(s6) %>% arrange(s5) %>% 
+  arrange(s4) %>% arrange(s3) %>% arrange(s2)
+dcr_last <- as.matrix(dcr_last)
+dcrm <- melt(dcr_last)
+
+pcr <- ggplot(dcrm, aes(x = Var2, y = Var1)) + 
+geom_raster(aes(fill=value),show.legend=FALSE) + 
+scale_fill_gradient(low="turquoise", high="darkblue") +
+labs(x="stimulus", y="chain",title="Culture, right skew") +
+theme_bw() + theme(axis.text.x=element_text(size=9, angle=0, vjust=0.3),
+                    axis.text.y=element_text(size=9))
+
+plot_grid(piu,pil,pir,pcu,pcl,pcr,ncol=3)
+```
+
+# Analyses on final generations
+
+Let's look at a bunch of things based on the final (converged) category for each chain. First, we can look at the aggregate classification by condition, averaged over everyone. Consistent with what we see above, there are no real strong boundaries or differences between conditions based on this metric.
+
+```{r aggregateclass, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dagg <- data.frame(rbind(colSums(dcu_last)/nrow(dcu_last),
+      colSums(dcl_last)/nrow(dcl_last),
+      colSums(dcr_last)/nrow(dcr_last),
+      colSums(diu_last)/nrow(diu_last),
+      colSums(dil_last)/nrow(dil_last),
+      colSums(dir_last)/nrow(dir_last)))
+dagg$condition = c("culture","culture","culture","individual","individual","individual")
+dagg$distribution = c("uniform","left","right","uniform","left","right")
+colnames(dagg) <- c(1,2,3,4,5,6,7,8,9,10,"condition","distribution")
+
+dagg_long <- dagg %>%
+  pivot_longer(cols=-c(condition,distribution),names_to="stimulus",values_to="value")
+dagg_long$stimulus <- as.numeric(dagg_long$stimulus)
+
+dagg_long %>% 
+  ggplot(mapping = aes(x = stimulus, y = value, group = condition)) + 
+  geom_line(size=1,aes(colour=condition)) +
+  geom_point(size=3,aes(colour=condition,shape=condition)) +
+  facet_wrap(~distribution) +
+  scale_colour_brewer(palette="Set1") +
+  theme_bw() + 
+  scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+  labs(title = "Aggregate classification by condition",
+    y = "Probability of label 2",
+    x = "Stimulus")
+```
+
+Now let's see if the conditions differ in terms of the complexity (number of boundaries) in the final solution.
+
+```{r nbounds, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- d_last %>%
+  group_by(condition, distribution) %>%
+  summarise(mean = mean(nbound),
+            sd = sd(nbound),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+
+dl_sum %>%
+  ggplot(mapping = aes(x = distribution,y = mean,fill = distribution) ) +
+  theme_bw() + 
+  geom_jitter(data=d_last,
+              mapping=aes(x=distribution,y=nbound,colour=distribution),
+              alpha=0.7, show.legend=FALSE,width=0.3,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) +
+  facet_wrap(~condition) +
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,3.5) +
+  labs(title = "Number of category boundaries in final generation",
+       y = "Mean # boundaries",
+       x = "Distribution")
+
+nbAov <- summary(aov(nbound ~ condition*distribution, data=d_last))
+```
+
+We did a two-way ANOVA with the outcome variable of number of boundaries and the two predictor variables of condition and distribution. The results revealed a significant main effect of condition (F(`r nbAov[[1]][[1]][1]`,`r nbAov[[1]][[1]][4]`)=`r round(nbAov[[1]][[4]][1],2)`, p=`r round(nbAov[[1]][[5]][1],3)`) but no main effect of distribution (F(`r nbAov[[1]][[1]][2]`,`r nbAov[[1]][[1]][4]`)=`r round(nbAov[[1]][[4]][2],2)`, p=`r round(nbAov[[1]][[5]][2],3)`) and no interaction (F(`r nbAov[[1]][[1]][3]`,`r nbAov[[1]][[1]][4]`)=`r round(nbAov[[1]][[4]][3],2)`, p=`r round(nbAov[[1]][[5]][3],3)`).
+
+How did people do in terms of finding the optimum solution? Here we graph the distance of the final categorisation from the optimum of that # of boundaries.
+
+```{r dnopt, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- d_last %>%
+  group_by(condition, distribution) %>%
+  summarise(mean = mean(optd),
+            sd = sd(optd),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+
+dl_sum %>%
+  ggplot(mapping = aes(x = distribution,y = mean,fill = distribution) ) +
+  theme_bw() + 
+  geom_jitter(data=d_last,
+              mapping=aes(x=distribution,y=optd,colour=distribution),
+              alpha=0.7, show.legend=FALSE,width=0.3,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) +
+  facet_wrap(~condition) +
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,7) +
+  labs(title = "Distance from optimum in final generation",
+       y = "Edit distance from optimum",
+       x = "Distribution")
+
+odAov <- summary(aov(optd ~ condition*distribution, data=d_last))
+
+dlt <- d_last %>% filter(condition=="individual" & distribution!="uniform")
+dltT <- t.test(optd ~ distribution, data=dlt)
+```
+
+We did a two-way ANOVA with the outcome variable of distance from the optimum for that distribution and the two predictor variables of condition and distribution. The results revealed no significant main effect of condition (F(`r odAov[[1]][[1]][1]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][1],2)`, p=`r round(odAov[[1]][[5]][1],3)`) but a significant main effect of distribution (F(`r odAov[[1]][[1]][2]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][2],2)`, p=`r round(odAov[[1]][[5]][2],3)`) and no interaction (F(`r odAov[[1]][[1]][3]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][3],2)`, p=`r round(odAov[[1]][[5]][3],3)`).
+
+Looking at it, the main conclusion is that people weren't sensitive to frequency, and always may have been assuming things were uniform, especially in the culture condition. The possible nuance here is that people were possibly a bit more sensitive to it in the individual condition, which would make sense given that they had many more trials in which to realise that some stimuli were much more common than others. If that's the case, it's not significant (the interaction isn't), but the trend is visible. Another possibly interesting thing is that people seemed more sensitive to it in the right vs left skew condition - i.e. when the most frequent items were dark coloured rather than light. This is only an aside and not a big thing given the omnibus lack of significance, but for what it's worth, I ran a t-test comparing just left and right within the individual condition and they are significantly different: t(`r round(dltT$parameter[[1]],2)`) =`r round(dltT$statistic[[1]],2)`, p=`r round(dltT$p.value,3)`, CI=[`r round(dltT$conf.int[[1]],2)`,`r round(dltT$conf.int[[2]],2)`]. All post-hoc and exploratory but suggests all together that (a) the reason people weren't sensitive to frequency is that they didn't realise some were more frequent, hence why individual was more sensitive than culture, and (b) there were perceptual biases that countered that realisation in the left-skew condition.
+
+This suggests that people weren't sensitive to frequency, and may have always been trying to optimise for what is best in the uniform condition. To test this let's look at the distance from the optimum for uniform.
+
+```{r duopt, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- d_last %>%
+  group_by(condition, distribution) %>%
+  summarise(mean = mean(optu),
+            sd = sd(optu),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+
+dl_sum %>%
+  ggplot(mapping = aes(x = distribution,y = mean,fill = distribution) ) +
+  theme_bw() + 
+  geom_jitter(data=d_last,
+              mapping=aes(x=distribution,y=optu,colour=distribution),
+              alpha=0.7, show.legend=FALSE,width=0.3,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) +
+  facet_wrap(~condition) +
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,4.5) +
+  labs(title = "Distance from uniform optimum in final generation",
+       y = "Edit distance from optimum",
+       x = "Distribution")
+
+odAov <- summary(aov(optu ~ condition*distribution, data=d_last))
+```
+
+We did a two-way ANOVA with the outcome variable of distance from the optimum for that distribution and the two predictor variables of condition and distribution. As one would expect if people were optimising for the uniform always, there was no significant main effect of condition (F(`r odAov[[1]][[1]][1]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][1],2)`, p=`r round(odAov[[1]][[5]][1],3)`) pr distribution (F(`r odAov[[1]][[1]][2]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][2],2)`, p=`r round(odAov[[1]][[5]][2],3)`) and no interaction (F(`r odAov[[1]][[1]][3]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][3],2)`, p=`r round(odAov[[1]][[5]][3],3)`).
+
+Let's also compare conditions in terms of how much they searched the space. As a first pass, let's consider how many different categorisation schemes each chain used. Did individuals tend to search it more thoroughly?
+
+```{r ncats, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- d_last %>%
+  group_by(condition, distribution) %>%
+  summarise(mean = mean(ncats),
+            sd = sd(ncats),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+
+dl_sum %>%
+  ggplot(mapping = aes(x = distribution,y = mean,fill = distribution) ) +
+  theme_bw() + 
+  geom_jitter(data=d_last,
+              mapping=aes(x=distribution,y=ncats,colour=distribution),
+              alpha=0.7, show.legend=FALSE,width=0.3,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) +
+  facet_wrap(~condition) +
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,6) +
+  labs(title = "Number of distinct category systems during life of chain",
+       y = "# of category systems",
+       x = "Distribution")
+
+odAov <- summary(aov(ncats ~ condition*distribution, data=d_last))
+```
+
+We did a two-way ANOVA with the outcome variable of number of distinct category systems explored by that chain and the two predictor variables of condition and distribution. There was no significant main effect of condition (F(`r odAov[[1]][[1]][1]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][1],2)`, p=`r round(odAov[[1]][[5]][1],3)`) pr distribution (F(`r odAov[[1]][[1]][2]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][2],2)`, p=`r round(odAov[[1]][[5]][2],3)`) and no interaction (F(`r odAov[[1]][[1]][3]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][3],2)`, p=`r round(odAov[[1]][[5]][3],3)`).
+
+How did conditions compare in how long they took to converge?
+
+```{r ngens, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- d_last %>%
+  group_by(condition, distribution) %>%
+  summarise(mean = mean(generation),
+            sd = sd(generation),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+
+dl_sum %>%
+  ggplot(mapping = aes(x = distribution,y = mean,fill = distribution) ) +
+  theme_bw() + 
+  geom_jitter(data=d_last,
+              mapping=aes(x=distribution,y=generation,colour=distribution),
+              alpha=0.7, show.legend=FALSE,width=0.3,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) +
+  facet_wrap(~condition) +
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,8) +
+  labs(title = "Number of generations in chain",
+       y = "# of generations",
+       x = "Distribution")
+
+odAov <- summary(aov(generation ~ condition*distribution, data=d_last))
+
+dfi <- dfull %>% filter(condition=="individual")
+dfc <- dfull %>% filter(condition=="culture")
+```
+
+We did a two-way ANOVA with the outcome variable of number of generations in that chain and the two predictor variables of condition and distribution. There was no significant main effect of condition (F(`r odAov[[1]][[1]][1]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][1],2)`, p=`r round(odAov[[1]][[5]][1],3)`) pr distribution (F(`r odAov[[1]][[1]][2]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][2],2)`, p=`r round(odAov[[1]][[5]][2],3)`) and no interaction (F(`r odAov[[1]][[1]][3]`,`r odAov[[1]][[1]][4]`)=`r round(odAov[[1]][[4]][3],2)`, p=`r round(odAov[[1]][[5]][3],3)`).
+
+# Analyses on full chains
+
+Now let's include all of our data and get a sense of what's happening with all of it. This adds additional complexities because they are non-independent, but also gives a much richer picture. For this we include all of the data, not just the ones that converged.
+
+First let's pursue the idea that culture and individual differ in how they search the space. We saw that they didn't really differ within chain (at least by the basic measure of number of distinct category systems) but they could still differ between chains, i.e., the individual condition chains are more distinct from each other (each cover different space) than the culture condition chains are.
+
+One way of looking at this is just calculating the number of distinct category systems arise over all of the chains. Indeed, there are `r length(unique(dfi$catsys))` in the individual condition and only `r length(unique(dfc$catsys))` in the culture condition. It's hard to tell how meaningful that is, however, because there are also a lot more chains in the individual condition: `r length(unique(dfi$trajectory))` compared to only `r length(unique(dfc$trajectory))`. [That said, there are a lot more distinct people in the culture condition: `r length(unique(dfc$participant))` in culture, `r length(unique(dfi$participant))` in individual].
+
+Anyway, a good way to figure out if this is actually different is to ask, if we limited ourselves to the equivalent number of chains as in the culture condition, how many dictinct category systems would we get? I test this below by drawing 500 random samples of `r length(unique(dfc$trajectory))` chains from the individual condition, and plotting their number of category systems each time.
+
+```{r ncatsystems, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+ncats <- rep(NA,500)
+nt <- unique(dfi$trajectory)
+for (i in 1:500) {
+  samples <- sample(nt,length(unique(dfc$trajectory)),replace=FALSE)
+  ncats[i] <- length(unique(dfi$catsys[dfi$trajectory %in% samples]))
+}
+
+condition <- c("individual","culture")
+mean <- c(mean(ncats),length(unique(dfc$catsys)))
+sd <- c(sd(ncats),0)
+sdErr <- c(sd(ncats)/sqrt(500),0)
+dncat <- data.frame(condition,mean,sd,sdErr)
+
+nc <- ncats
+nc[501] <- length(unique(dfc$catsys))
+condition <- c(rep("individual",500),"culture")
+dncall <- data.frame(condition,nc)
+
+dncat %>%
+  ggplot(mapping = aes(x = condition,y = mean,fill=condition) ) +
+  geom_jitter(data=dncall, mapping=aes(x=condition,y=nc,colour=condition),
+            alpha=0.7, show.legend=FALSE,width=0.4,height=0.05) +
+  geom_col(show.legend=FALSE,alpha=0.3,colour="black") +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr),width=0.2) + 
+  theme_bw() + 
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  ylim(0,140) +
+  labs(title = "Number of distinct category systems",
+       y = "Number of distinct systems out of 45 chains",
+       x = "Condition")
+
+ncatT <- t.test(ncats, mu=length(unique(dfc$catsys)))
+```
+
+You pretty much don't even need to do the stats on this, but for what it's worth, a one-sample t-test comparing these sample in the individual condition to the observed number of distinct systems in the culture condition (`r length(unique(dfc$catsys))`) is significant: (t(`r round(ncatT$parameter[[1]],2)`) =`r round(ncatT$statistic[[1]],2)`, p=`r round(ncatT$p.value,3)`, CI=[`r round(ncatT$conf.int[[1]],2)`,`r round(ncatT$conf.int[[2]],2)`]. And only `r 100*sum(ncats<(length(unique(dfc$catsys))+1))/500`% of the samples had `r length(unique(dfc$catsys))` or fewer distinct category systems.
+
+In combination with the previous results showing that the converged category systems are more complex in the individual condition *and* that no single chain explores more in the individual condition, this suggests that individual chains are doing more exploring overall because they are more different from each other -- which is probably because they are more complex, with more boundaries (there are more different systems possible with 3 boundaries than 1, for instance). We explore that next by breaking down in each condition how many unique systems of each number of boundaries are found.
+
+```{r nunqbound, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+culture <- rep(NA,8)
+individual <- rep(NA,8)
+for (i in 1:8) {
+  culture[i] <- length(unique(dfc$catsys[dfc$nbound==i]))
+  individual[i] <- length(unique(dfi$catsys[dfi$nbound==i]))
+}
+
+# combine last three so can do chisquared (no cells less than five)
+dunq <- rbind(culture,individual)
+dunq[,6] <- rowSums(dunq[,6:8])
+dunq <- dunq[,1:6]
+nqX <- chisq.test(dunq)
+
+# create figure
+boundary <- c("1b","2b","3b","4b","5b","6b","7b","8b","1b","2b","3b","4b","5b","6b","7b","8b")
+condition <- c(rep("culture",8),rep("individual",8))
+values <- c(culture,individual)
+dnbci <- data.frame(condition,boundary,values)
+
+dnbci %>% 
+  ggplot(mapping = aes(x=boundary,y=values,fill=condition)) +
+  geom_bar(position="dodge",stat="identity",colour="black",alpha=0.7) +
+  theme_bw() + 
+  scale_fill_brewer(palette="Set1") +
+  scale_colour_brewer(palette="Set1") +
+  labs(title = "Distinct category systems for each # of boundaries",
+       y = "Number of distinct systems",
+       x = "Number of boundaries")
+
+```
+
+It's pretty clear that this is exactly what's happened. Both conditions completely explore the space of 1-boundary solutions, and most of the space of 2-boundary solutions, but in the individual condition there are many more 3-6 boundary solutions considered. FWIW, this is significant by a chi-squared test of independence (X^2(`r round(nqX$parameter[[1]],1)`) =`r round(nqX$statistic[[1]],2)`, p=`r round(nqX$p.value,3)`); FYI to do the test I collapsed the last three boundaries into one cell, so that all the cells were above five.
+
+Another thing to look at is how chain complexity changes over time (generations). This is shown below and is super interesting. As expected, the culture conditions trim complexity more and more quickly -- but this is especially pronounced in the left-skew and right-skew conditions (especially the right). This suggests that when the underlying landscape requires more complexity, individuals are more sensitive to it, but it's not like they just keep complexity for no reason. (That said some of the individuals stopped before 5 or 6 or more generations, so it could also be that only some of the individuals were attuned to it, or we stopped them before they became attuned).
+
+```{r boundit, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- dfull %>%
+  group_by(condition, distribution, generation) %>%
+  summarise(mean = mean(nbound),
+            sd = sd(nbound),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+dl_sum$sd[is.na(dl_sum$sd)] <- 0
+dl_sum$sdErr[is.na(dl_sum$sdErr)] <- 0
+
+dl_sum %>% 
+  ggplot(mapping = aes(x = generation, y = mean, group = condition)) + 
+  geom_line(size=1,aes(colour=condition)) +
+  geom_point(size=3,aes(colour=condition,shape=condition)) +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr,colour=condition),
+                width=0.2,alpha=0.4) +
+  facet_wrap(~distribution) +
+  scale_colour_brewer(palette="Set1") +
+  theme_bw() + 
+  scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+  labs(title = "Complexity change over time",
+    y = "Number of boundaries",
+    x = "Generation")
+
+```
+
+To do statistics on this requires a more complex model, because the same trajectory at different generations is non-independent. We therefore consider mixed effects models and select the best one according to AIC (where lower AIC = better). 
+
+```{r AICnbound, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+
+# mixed effects models
+# simplest has only trajectory as a random effect
+m1 <- lmer(nbound ~ (1|trajectory), data=dfull)
+# only generation as fixed effect and trajectory as random; no interaction
+m2 <- lmer(nbound ~ generation + (1|trajectory), data=dfull)
+# generation and condition as fixed effects, and trajectory as random; no interaction
+m3 <- lmer(nbound ~ condition+generation + (1|trajectory), data=dfull)
+# generation and distribution as fixed effects, and trajectory as random; no interaction
+m4 <- lmer(nbound ~ distribution+generation + (1|trajectory), data=dfull)
+# generation,condition, and distribution as fixed effects, and trajectory as random; no int
+m5 <- lmer(nbound ~ condition+distribution+generation + (1|trajectory), data=dfull)
+# generation and condition as fixed effects, and trajectory as random; interaction
+m6 <- lmer(nbound ~ condition*generation + (1|trajectory), data=dfull)
+# generation and distribution as fixed effects, and trajectory as random; interaction
+m7 <- lmer(nbound ~ distribution*generation + (1|trajectory), data=dfull)
+# generation,condition, and distribution as fixed effects, and trajectory as random; int
+m8 <- lmer(nbound ~ condition*distribution*generation + (1|trajectory), data=dfull)
+
+AIC(m1,m2,m3,m4,m5,m6,m7,m8)
+```
+
+Looks like the model with the lowest AIC is m3, which has condition and generation as the fixed effects, trajectory as a random effect, and no interaction. in general adding distribution into the model does not help. We now interpret the parameters of the best-fitting model:
+
+```{r paramnbound, warning=FALSE, message=FALSE}
+summary(m3)
+```
+
+Note that lmer deliberately does not report p-values, but we can nevertheless interpret some of these coefficients. I think this means that the individual condition does result in more complexity (more boundaries), about 0.54 more than the culture condition on average when trajectory and generation is taken into account. And increasing generations have lower complexity, about 0.23 fewer boundaries with each additional generation.
+
+We don't have p-values but we can calculate the likelihood ratios. I think we can interpret this as meaning that the model with condition is 5.78 times more likely than the model without, and the model with generation is 133.02 times more likely than the model without
+
+```{r likerats, warning=FALSE, message=FALSE}
+# for condition
+m3nocond <- lmer(nbound ~ generation + (1|trajectory), REML=F, data=dfull)
+m3nogen <- lmer(nbound ~ condition + (1|trajectory), REML=F, data=dfull)
+m3wboth <- lmer(nbound ~ condition+generation + (1|trajectory), REML=F, data=dfull)
+LRcond <- (AIC(m3nocond)-AIC(m3wboth))*log2(exp(1))
+LRcond
+LRgen <- (AIC(m3nogen)-AIC(m3wboth))*log2(exp(1))
+LRgen
+```
+
+Let's also look at the pattern of change across generation and by condition. Here the outcome variable is the number of items that changed from the previous mapping: zero indicates no change, ten would mean all of them changed label. 
+
+```{r changeit, fig.width=9, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE}
+dl_sum <- dfull %>%
+  group_by(condition, distribution, generation) %>%
+  summarise(mean = mean(catchange),
+            sd = sd(catchange),
+            n = n(),
+            sdErr = sd/sqrt(n)) %>%
+  ungroup()
+dl_sum$sd[is.na(dl_sum$sd)] <- 0
+dl_sum$sdErr[is.na(dl_sum$sdErr)] <- 0
+
+dl_sum %>% 
+  ggplot(mapping = aes(x = generation, y = mean, group = condition)) + 
+  geom_line(size=1,aes(colour=condition)) +
+  geom_point(size=3,aes(colour=condition,shape=condition)) +
+  geom_errorbar(mapping = aes(ymin = mean - sdErr,ymax = mean + sdErr,colour=condition),
+                width=0.2,alpha=0.4) +
+  facet_wrap(~distribution) +
+  scale_colour_brewer(palette="Set1") +
+  theme_bw() + 
+  scale_x_continuous(breaks=c(2,4,6,8,10),labels=c("2","4","6","8","10")) +
+  labs(title = "Amount of change each iteration over time",
+    y = "Change in system",
+    x = "Generation")
+```
+
+Looks like there wasn't much difference by condition or distribution -- perhaps with right individual, but keep in mind that there are only two people past generation 6 there so it's not that meaningfl. Anyway, let's run the statistics to make sure.
+
+```{r AICcatchange, fig.width=9, fig.height=5, warning=FALSE, message=FALSE}
+
+# mixed effects models
+# simplest has only trajectory as a random effect
+m1 <- lmer(catchange ~ (1|trajectory), data=dfull)
+# only generation as fixed effect and trajectory as random; no interaction
+m2 <- lmer(catchange ~ generation + (1|trajectory), data=dfull)
+# generation and condition as fixed effects, and trajectory as random; no interaction
+m3 <- lmer(catchange ~ condition+generation + (1|trajectory), data=dfull)
+# generation and distribution as fixed effects, and trajectory as random; no interaction
+m4 <- lmer(catchange ~ distribution+generation + (1|trajectory), data=dfull)
+# generation,condition, and distribution as fixed effects, and trajectory as random; no int
+m5 <- lmer(catchange ~ condition+distribution+generation + (1|trajectory), data=dfull)
+# generation and condition as fixed effects, and trajectory as random; interaction
+m6 <- lmer(catchange ~ condition*generation + (1|trajectory), data=dfull)
+# generation and distribution as fixed effects, and trajectory as random; interaction
+m7 <- lmer(catchange ~ distribution*generation + (1|trajectory), data=dfull)
+# generation,condition, and distribution as fixed effects, and trajectory as random; int
+m8 <- lmer(catchange ~ condition*distribution*generation + (1|trajectory), data=dfull)
+
+AIC(m1,m2,m3,m4,m5,m6,m7,m8)
+```
+
+As expected based on the graph, here the best-fit model is m2, which has just the random effect of trajectory and the fixed effect of generation. It's becoming more learnable (i.e., fewer errors from generation to generation) over time at a similar rate across conditions. Put another way, the amount of change to the category structure is similar from one generation to another regardless of condition. So if individual conditions are searching over more space, it's not because each step is larger - it's just that different individuals end up going in different directions, whereas all of the culture changes went in similar directions (toward the simple one-boundary solutions).
+
+```{r paramcatchange, warning=FALSE, message=FALSE}
+summary(m2)
+```

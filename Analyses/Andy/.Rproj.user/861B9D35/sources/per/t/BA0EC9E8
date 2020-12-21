@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608442773621.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1575179011",
+    "id" : "BA0EC9E8",
+    "lastKnownWriteTime" : 1608442804,
+    "last_content_update" : 1608442804121,
+    "path" : "~/Documents/github/playing/Analyses/Andy/data_playing.Rmd",
+    "project_path" : "data_playing.Rmd",
+    "properties" : {
+        "cursorPosition" : "25,32",
+        "scrollLine" : "13"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

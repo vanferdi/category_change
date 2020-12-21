@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1608527411546.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "9A31FF1B",
+    "lastKnownWriteTime" : 1608442804,
+    "last_content_update" : 1608442804,
+    "path" : "~/Desktop/Andy/data_playing.Rmd",
+    "project_path" : "data_playing.Rmd",
+    "properties" : {
+        "cursorPosition" : "19,16",
+        "scrollLine" : "32"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
