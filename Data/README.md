@@ -1,6 +1,6 @@
 # Data
 
-Explanation of the columns in the file `experiment1_FINAL.csv`
+Explanation of the columns in the file `experiment1_FINAL.csv` and `experiment2_FINAL.csv`
 
 (Right now it just contains the info relevant for understanding `frequency1.R`)
 
