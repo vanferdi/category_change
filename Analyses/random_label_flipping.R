@@ -199,11 +199,36 @@ stat_dist(p)
 # is the method above (presumably with the effect of initial conditions in there) sufficient?
 # (this is totally some other theoretical question about estimating stationary distributions from observed lineages)
 
+iterations <- 8
+init_set <- get_inits() # 252 of them
 
+iteration <- c()
+inputs <- c()
+outputs <- c()
 
+for (i in 1:iterations) {
+	iteration <- c(iteration,rep(i,length(init_set)))
+	current_set <- get_inits()
+	inputs <- c(inputs,current_set)
+	current_set <- rando_flipper(current_set)
+	outputs <- c(outputs,current_set)
+}
 
+d <- data.frame(iteration,inputs,outputs)
+d <- add_cols()
 
+# look at types over time
+table(subset(d,iteration==1)$input_type)
+table(subset(d,iteration==1)$output_type)
+table(subset(d,iteration==2)$output_type)
+table(subset(d,iteration==3)$output_type)
+table(subset(d,iteration==4)$output_type)
+table(subset(d,iteration==5)$output_type)
+table(subset(d,iteration==6)$output_type)
+table(subset(d,iteration==7)$output_type)
+table(subset(d,iteration==8)$output_type)
 
+# the continuous ones do not increase
 
 ##########################################################################
 # Summary
