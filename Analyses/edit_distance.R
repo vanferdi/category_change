@@ -95,34 +95,34 @@ table(df1$N_boundaries_input,df1$N_boundaries)
 
 systype_input <- if(df1$N_boundaries_input==1){"continuous"}
 
-ifelse(df1$N_boundaries_input==1, "continous", "disjoint")
+ifelse(df1$N_boundaries_input==1, "continuous", "disjoint")
 
-systype_input <- ifelse(df2$N_boundaries_input==0, "degenerate", ifelse(df2$N_boundaries_input==1, "continous", "disjoint"))
+systype_input <- ifelse(df2$N_boundaries_input==0, "-degenerate", ifelse(df2$N_boundaries_input==1, "continuous", "disjoint"))
 cbind(df2$N_boundaries_input,x)
 
 ##########################################################################
 # what are the TPs among continuous and disjoint systems?
 
 # add to df a column that categorizes input and output systems into 3 types
-systype_input <- ifelse(df1$N_boundaries_input==0, "degenerate", ifelse(df1$N_boundaries_input==1, "continous", "disjoint"))
-systype_output <- ifelse(df1$N_boundaries==0, "degenerate", ifelse(df1$N_boundaries==1, "continous", "disjoint"))
+systype_input <- ifelse(df1$N_boundaries_input==0, "-degenerate", ifelse(df1$N_boundaries_input==1, "continuous", "disjoint"))
+systype_output <- ifelse(df1$N_boundaries==0, "-degenerate", ifelse(df1$N_boundaries==1, "continuous", "disjoint"))
 df1 <- cbind(df1,systype_input,systype_output)
 
-systype_input <- ifelse(df2$N_boundaries_input==0, "degenerate", ifelse(df2$N_boundaries_input==1, "continous", "disjoint"))
-systype_output <- ifelse(df2$N_boundaries==0, "degenerate", ifelse(df2$N_boundaries==1, "continous", "disjoint"))
+systype_input <- ifelse(df2$N_boundaries_input==0, "-degenerate", ifelse(df2$N_boundaries_input==1, "continuous", "disjoint"))
+systype_output <- ifelse(df2$N_boundaries==0, "-degenerate", ifelse(df2$N_boundaries==1, "continuous", "disjoint"))
 df2 <- cbind(df2,systype_input,systype_output)
 
 a <- table(df1$systype_input,df1$systype_output)
-"         continous disjoint
-continous       177       14
-disjoint         97      354
+"          continuous disjoint
+continuous        177       14
+disjoint           97      354
 "
 
 b <- table(df2$systype_input,df2$systype_output)
-"          continous degenerate disjoint
-continous        186          4       43
-degenerate         2         14        3
-disjoint         134         15      291
+"            degenerate continuous disjoint
+degenerate           14          2        3
+continuous            4        186       43
+disjoint             15        134      291
 "
 
 all_ins <- unlist(list(df1$systype_input,df2$systype_input))
@@ -138,7 +138,53 @@ stat_dist <- function(matrix) { # returns the stationary distribution of a RIGHT
 	vec <- eigen(t(matrix))$vectors[,1]
 	return(vec/sum(vec))
 }
-stat_dist(pall) # 0.6264775 0.3299556 0.0435669
+stat_dist(pall) # 0.6264775  0.3299556  0.0435669
 
+a <- a/rowSums(a)
+b <- b/rowSums(b)
+stat_dist(a)    # 0          0.7458234  0.2541766
+stat_dist(b)    # 0.08228323 0.56916726 0.34854951
+
+##########################################################################
+# how do the 3 types change over time?
+
+d <- df1
+# get strategy proportions over time
+iter1 <- subset(d,iteration==1)
+# initialize with the input to iteration 1
+iter1 <- subset(d,iteration==1) #table(iter1$systype_input)
+total <- c(length(iter1$X)) # total number of systems (use for normalizing each p)
+p_degenerate <- c(length(subset(iter1,systype_input=="degenerate")$X))
+p_continuous <- c(length(subset(iter1,systype_input=="continuous")$X))
+p_disjoint <- c(length(subset(iter1,systype_input=="disjoint")$X))
+
+# now use the output systems
+for (i in 1:max(d$iteration)) {
+	iter <- subset(d,iteration==i)
+	total <- c(total,length(iter$X))
+	p_degenerate <- c(p_degenerate,length(subset(iter,systype_input=="degenerate")$X))
+	p_continuous <- c(p_continuous,length(subset(iter,systype_input=="continuous")$X))
+	p_disjoint <- c(p_disjoint,length(subset(iter,systype_input=="disjoint")$X))
+}
+	
+# sanity check that these all equal the total
+unique((p_degenerate+p_continuous+p_disjoint)==total)
+
+p_degenerate <- p_degenerate/total
+p_continuous <- p_continuous/total
+p_disjoint <- p_disjoint/total
+
+p_degenerate
+p_continuous
+p_disjoint
+
+# plot the type of each catsys over time
+time <- seq(1,length(total))
+plot(time,p_degenerate,type="line",las=1,ylim=c(0,1),lty="dotted")
+lines(time,p_continuous)
+lines(time,p_disjoint,lty="twodash")
+
+# TO DO - make the last system in each category persist in each later generation
+# for a better curved plot that communicates variants taking over the population
 
 
