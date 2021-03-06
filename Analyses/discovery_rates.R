@@ -248,6 +248,17 @@ d <- space_discovery(df2c,512)
 
 rate_plot(a,b,c,d,"expansion rate - 512 systems (45 from I)")
 
+# important note:
+# each chain has a variable number of tries (iterations) in it
+# so matching chain number doesn't actually match the number of tries
+# compare:
+nrow(sampleI45(df1))
+nrow(df1c)
+
+# k but I is still hitting a higher proportion of novel ones,
+# even when it's total tries is lower than the tries in C (always 207 above)
+# (run the above code over and over to see this)
+
 
 ################################################
 # Expansion rate - 1024 system (45 chains from I)
