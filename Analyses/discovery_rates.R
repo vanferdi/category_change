@@ -230,6 +230,36 @@ d <- space_discovery(df2c,1024)
 rate_plot(a,b,c,d,"expansion rate - 1024 systems")
 
 
+################################################
+# Expansion rate - 512 system (45 chains from I)
+################################################
+
+sampleI45 <- function(df) { # feed it df1 or df2
+	I_trajectories <- unique(subset(df,condition=="I")$trajectory)  # get all 90 chains in I
+	I_trajectories_sample <- sample(I_trajectories,45) # randomly choose 45 of them
+	dfI45 <- df[df$trajectory %in% I_trajectories_sample,]  # 214 or so entries
+	return(dfI45)
+}
+
+a <- space_discovery(sampleI45(df1),512)
+b <- space_discovery(df1c,512)
+c <- space_discovery(sampleI45(df2),512)
+d <- space_discovery(df2c,512)
+
+rate_plot(a,b,c,d,"expansion rate - 512 systems (45 from I)")
+
+
+################################################
+# Expansion rate - 1024 system (45 chains from I)
+################################################
+
+a <- space_discovery(sampleI45(df1),1024)
+b <- space_discovery(df1c,1024)
+c <- space_discovery(sampleI45(df2),1024)
+d <- space_discovery(df2c,1024)
+
+rate_plot(a,b,c,d,"expansion rate - 1024 systems (45 from I)")
+
 ##########################################################################
 # Questions
 ##########################################################################
@@ -259,12 +289,36 @@ length(unique(df1c$system1024))/nrow(df1c)  #  91 / 207 = 0.440
 
 # 512 things to discover in 642 tries vs 1024 things to discover in 642 tries.
 
+##########################################################################
+# Double check for the just 8
+##########################################################################
 
+df1_just8 <- subset(df1,iteration < 9)
+df2_just8 <- subset(df2,iteration < 9)
 
+df1i_just8 <- subset(df1_just8,condition=="I")
+df1c_just8 <- subset(df1_just8,condition=="C")
+df2i_just8 <- subset(df2_just8,condition=="I")
+df2c_just8 <- subset(df2_just8,condition=="C")
 
+# 1024 system
+length(unique(df1_just8$system1024))/nrow(df1_just8)    # 237 / 633 = 0.374
+length(unique(df1i_just8$system1024))/nrow(df1i_just8)  # 197 / 435 = 0.453   same
+length(unique(df1c_just8$system1024))/nrow(df1c_just8)  #  90 / 198 = 0.455
 
+# numbers in C and I got more similar to one another when you restructed analysis to the first 8 iterations
 
+# 512 system
+length(unique(df1_just8$system512))/nrow(df1_just8)     # 188 / 633 = 0.297
+length(unique(df1i_just8$system512))/nrow(df1i_just8)   # 159 / 435 = 0.366   same
+length(unique(df1c_just8$system512))/nrow(df1c_just8)   #  75 / 198 = 0.379
 
+# compare above to 512 system original
+length(unique(df1$system512))/nrow(df1)                 # 188 / 642 = 0.293
+length(unique(df1i$system512))/nrow(df1i)               # 159 / 435 = 0.366
+length(unique(df1c$system512))/nrow(df1c)               #  75 / 207 = 0.362
+
+# numbers in C and I got less similar - C shot up higher
 
 
 
