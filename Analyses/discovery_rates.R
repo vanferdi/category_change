@@ -2,6 +2,11 @@
 df1 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment1_FINAL.csv", colClasses=c(system1024="character"))
 df2 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment2_FINAL.csv", colClasses=c(system1024="character"))
 	
+df1i <- subset(df1,condition=="I")
+df1c <- subset(df1,condition=="C")
+df2i <- subset(df2,condition=="I")
+df2c <- subset(df2,condition=="C")
+
 ##########################################################################
 # Discovery Rate
 ##########################################################################
@@ -330,6 +335,254 @@ length(unique(df1i$system512))/nrow(df1i)               # 159 / 435 = 0.366
 length(unique(df1c$system512))/nrow(df1c)               #  75 / 207 = 0.362
 
 # numbers in C and I got less similar - C shot up higher
+
+
+##########################################################################
+# Local and Global Discoveries
+##########################################################################
+
+local_global_maker <- function(df,system_type) {  # system_type = 512 or 1024
+	local_discovery <- c()  # is this system new to the chain? (not in previous iterations in this chain)
+	global_discovery <- c() # is this system new to the world? (not in previous iterations in all chains)
+	
+	# loop through each system (row) in the dataframe
+	for (i in 1:nrow(df)) {
+	#for (i in 1:10) {
+		current_system <- df[i,system_type]     # grab the current system
+		current_trajectory <- df[i,]$trajectory # look up the trajectory ID of the current system (chain is for C only)
+		current_iteration <- df[i,]$iteration   # look up what iteration it is
+		
+		# get all systems from the previous iterations in that chain
+		temp <- subset(df,trajectory==current_trajectory)
+		previous_local <- subset(temp,iteration<current_iteration)[[system_type]] # can be empty
+		
+		# check if current system already exists in the previous systems (setdiff(a,b) returns what is in a and not in b)
+		n <- length(setdiff(current_system,previous_local))  # returns 0 if current_system is not new, 1 if it is
+		local_discovery <- c(local_discovery,n) # add boolean value to the new column we're creating
+		
+		# check if the current system already exists in previous systems of ALL the chains in the respective condition
+		current_condition <- df[i,]$condition
+		temp <- subset(df,condition==current_condition)
+		previous_global <- subset(temp,iteration<current_iteration)[[system_type]]
+		n <- length(setdiff(current_system,previous_global))
+		global_discovery <- c(global_discovery,n)
+		
+	}
+	return(list(local_discovery,global_discovery))
+}
+
+# btw, here's how to access a dataframe column using a variable in place of the column name (por fin!):
+system_type <- "system1024"
+df1[[system_type]]
+
+# add columns for both systems to df1
+local_discovery_512 <- local_global_maker(df1,"system512")[[1]]
+global_discovery_512 <- local_global_maker(df1,"system512")[[2]]
+local_discovery_1024 <- local_global_maker(df1,"system1024")[[1]]
+global_discovery_1024 <- local_global_maker(df1,"system1024")[[2]]
+df1 <- cbind(df1,local_discovery_512,global_discovery_512,local_discovery_1024,global_discovery_1024)
+
+head(df1)
+
+################################################
+# sanity checks
+
+# all iteration = 1 should have discovery = 1
+subset(df1,iteration==1)$local_discovery_512
+subset(df1,iteration==1)$global_discovery_512
+subset(df1,iteration==1)$local_discovery_1024
+subset(df1,iteration==1)$global_discovery_1024
+
+################################################
+# for starters, just look at the data
+
+df1i <- subset(df1,condition=="I")  # 435 rows
+df1c <- subset(df1,condition=="C")  # 207 rows
+
+df1i$local_discovery_1024 
+df1c$local_discovery_1024
+
+################################################
+
+il <- df1i$local_discovery_1024 
+cl <- df1c$local_discovery_1024
+ig <- df1i$global_discovery_1024 
+cg <- df1c$global_discovery_1024
+
+sum(il)/length(il)  # 0.737931   local discoveries per try, I
+sum(cl)/length(cl)  # 0.7536232                             C    
+sum(ig)/length(ig)  # 0.5103448 global discoveries per try, I
+sum(cg)/length(cg)  # 0.5120773                             C
+
+# the probability that any try will be a local discovery is ~ 0.75 and a global discovery is ~ 0.5
+
+# double check that 512 is approx identical
+il <- df1i$local_discovery_512 
+cl <- df1c$local_discovery_512
+ig <- df1i$global_discovery_512 
+cg <- df1c$global_discovery_512
+
+sum(il)/length(il)  # 0.737931   local discoveries per try, I
+sum(cl)/length(cl)  # 0.7536232                             C    
+sum(ig)/length(ig)  # 0.4482759 global discoveries per try, I
+sum(cg)/length(cg)  # 0.4541063
+
+# this makes sense:
+# the local scores don't change because people don't reverse the label mapping in one chain
+table(df1i$local_discovery_1024,df1i$local_discovery_512) # see, no mismatch in local scores at all
+# but the global scores are lower because they do discover sister systems
+table(df1i$global_discovery_1024,df1i$global_discovery_512) # 27 512 "olds" are new according to 1024
+sum(df1i$global_discovery_1024) # 222 new 1024 systems = 195 + 27
+
+
+
+##########################################################################
+# do lmer - stick to the 1024
+
+# is there a significant effect of condition on discovery rate or not?
+
+#############
+### LOCAL ###
+#############
+full <- glmer(local_discovery_1024 ~ condition * iteration + (1|trajectory), data=df1, family=binomial)
+m1 <- glmer(local_discovery_1024 ~ iteration + (1|trajectory), data=df1, family=binomial)
+m2 <- glmer(local_discovery_1024 ~ condition + (1|trajectory), data=df1, family=binomial)
+anova(full,m1)  # full is not better, so lose condition
+anova(full,m2)  # full is sig better, so keep iteration
+
+# what I think the relationship is: as iteration goes up, fewer systems are discovered
+summary(m1)
+"            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  3.17780    0.37819   8.403  < 2e-16 ***
+iteration   -0.59201    0.09882  -5.991 2.09e-09 ***"
+# with each iteration, global discovery rate goes down
+
+# check one thing...
+m0 <- glmer(local_discovery_1024 ~ condition + iteration + (1|trajectory), data=df1, family=binomial)
+anova(full,m0) # well crap, marginally significant interaction... but condition doesn't matter on its own
+
+# k well what's the effect of condition then
+summary(m0)
+"            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  3.21300    0.41980   7.654 1.95e-14 ***
+conditionI  -0.06149    0.30722  -0.200    0.841    
+iteration   -0.59002    0.09919  -5.948 2.71e-09 ***"
+# condition I means fewer local discoveries?
+
+# prob just go with this:
+summary(full)
+"                     Estimate Std. Error z value Pr(>|z|)    
+(Intercept)            2.7145     0.4617   5.879 4.12e-09 ***
+conditionI             0.7780     0.5273   1.476   0.1400    
+iteration             -0.4587     0.1111  -4.129 3.64e-05 ***
+conditionI:iteration  -0.2226     0.1138  -1.955   0.0506 ."
+
+##############
+### GLOBAL ###
+##############
+full <- glmer(global_discovery_1024 ~ condition * iteration + (1|trajectory), data=df1, family=binomial)
+
+summary(full)  # only iteration is significant
+"                      Estimate Std. Error z value Pr(>|z|)    
+(Intercept)           2.590798   0.477630   5.424 5.82e-08 ***
+conditionI           -0.006004   0.546239  -0.011    0.991    
+iteration            -0.845478   0.131147  -6.447 1.14e-10 ***
+conditionI:iteration  0.007596   0.138264   0.055    0.956 "
+# with each iteration, global discovery rate goes down
+
+##########################################################################
+# make new dataframe for plotting - stick to the 1024 systems
+
+df <- df1
+
+# columns:
+trajectory <- c()
+tries <- c()  # this is the number of iterations in the trajectory
+local_discoveries <- c()
+global_discoveries <- c()
+condition <- c()
+
+set_of_trajectory_IDs <- unique(df$trajectory)
+length(set_of_trajectory_IDs) # 135 trajectories (45+90=135)
+
+for (i in set_of_trajectory_IDs) {   # for each trajectory in the data
+	sub <- subset(df,trajectory==i)
+	trajectory <- c(trajectory,i)
+	condition <- c(condition,as.character(sub[1,]$condition))
+	tries <- c(tries,max(sub$iteration))
+	local_discoveries <- c(local_discoveries,sum(sub$local_discovery_1024))
+	global_discoveries <- c(global_discoveries,sum(sub$global_discovery_1024))
+}
+
+df_discovery <- data.frame(trajectory,condition,tries,local_discoveries,global_discoveries)
+
+############################
+# look at result
+
+table(df_discovery$local_discoveries,df_discovery$tries)  # discoveries on left, tries on top
+"   2  3  4  5  6  7  8  9 10 11
+1  25  0  0  0  0  0  0  0  0  0     25 chains of length 2 made 1 discovery
+2   0 23  4  1  1  0  0  0  0  0
+3   0  0 22  2  0  1  0  0  0  0
+4   0  0  0 12  4  2  1  0  0  0
+5   0  0  0  0  8  1  1  0  0  0
+6   0  0  0  0  0  3  5  1  0  0
+7   0  0  0  0  0  0  7  0  0  0
+8   0  0  0  0  0  0  7  1  2  0
+10  0  0  0  0  0  0  0  0  0  1"
+
+
+
+
+
+############################
+# PLOT
+
+require("tidyverse")
+
+# scatter plot of LOCAL discoveries
+df_discovery %>% 
+	ggplot(mapping = aes(x=tries,y=local_discoveries)) +
+	geom_point(aes(color = factor(condition)), alpha=0.5, position = position_jitter(width=0.2, height=0.2)) +
+	scale_color_manual(values = c("red", "blue")) +
+	scale_x_continuous(breaks = round(seq(2, 11, by = 1),1)) +
+	scale_y_continuous(breaks = round(seq(1, 10, by = 1),1)) +
+	labs(title = "Number of systems discovered by chains of different lengths",
+		 y = "total local discoveries",
+		 x = "length of chain")
+
+# scatter plot of GLOBAL discoveries
+df_discovery %>% 
+	ggplot(mapping = aes(x=tries,y=global_discoveries)) +
+	geom_point(aes(color = factor(condition)), alpha=0.5, position = position_jitter(width=0.2, height=0.2)) +
+	scale_color_manual(values = c("red", "blue")) +
+	scale_x_continuous(breaks = round(seq(2, 11, by = 1),1)) +
+	scale_y_continuous(breaks = round(seq(1, 10, by = 1),1)) +
+	labs(title = "Number of systems discovered by chains of different lengths",
+		 y = "total global discoveries",
+		 x = "length of chain")
+
+
+
+
+
+# scatter plot of GLOBAL discoveries - include a regression line
+df_discovery %>% 
+	ggplot(mapping = aes(x=tries,y=global_discoveries)) +
+	geom_point(aes(color = factor(condition)), alpha=0.5, position = position_jitter(width=0.2, height=0.2)) +
+	scale_color_manual(values = c("red", "blue")) +
+	scale_x_continuous(breaks = round(seq(2, 11, by = 1),1)) +
+	scale_y_continuous(breaks = round(seq(1, 10, by = 1),1)) +
+	labs(title = "Number of systems discovered by chains of different lengths",
+		 y = "total discoveries",
+		 x = "length of chain") +
+	stat_summary(fun.data=mean_cl_normal) + 
+	geom_smooth(method='lm', formula= y~x)
+
+summary(lm(global_discoveries ~ tries * condition)) # there's no effect of condition, only tries
+
+
+
 
 
 
