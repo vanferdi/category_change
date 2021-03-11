@@ -95,6 +95,9 @@ for (i in 1:nrow(d)) {
                         d$s6[i],d$s7[i],d$s8[i],d$s9[i],d$s10[i])
 }
 
+# V: catsys ends up being identical to system1024
+# verify with: table(d$system1024==d$catsys)
+
 # set up the optimal boundaries
 # for u can calculate it based on just # of label1 there is
 # for l and r, each element in the list is for the next boundary number
