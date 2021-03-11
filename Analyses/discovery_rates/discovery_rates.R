@@ -657,6 +657,62 @@ summary(lm(global_discoveries ~ tries * condition)) # there's no effect of condi
 
 
 
+##########################################################################
+# Number of unique category systems from 45 sampled chains in I
+##########################################################################
+# replicate Andy's code from "data_playing.R"
+ 
+N <- 500
+ncats <- rep(NA,N)   # total unique category systems found by that sample of 45 chains
+ntries <- rep(NA,N)  # put the total number of generations in all sampled chains here (= total tries)
+nt <- unique(df1i$trajectory)
+for (i in 1:N) {
+	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)
+	ncats[i] <- length(unique(df1i$system1024[df1i$trajectory %in% samples]))
+	ntries[i] <- length(df1i$system1024[df1i$trajectory %in% samples])
+}
+
+# compare mean(ncats) to the unique systems discovered by the 45 chains in condition C
+mean(ncats) # about 113-114
+sd(ncats)   # about 9-11
+length(unique(df1c$system1024)) # 91 uniques
+
+# compare mean(ntries) to the total number of tries in C
+mean(ntries)  # about 216-218
+nrow(df1c)    # 207 tries
+
+# do the extra tries in I account for the higher mean number of unique systems found?
+# 10 more tries get you 4.5 more systems (using the I rate of 0.4528736)
+# but I is showing 113-91 = 22 more systems discovered, so 10 tries falls short.
+
+# coz otherwise the discovery rates are pretty similar:
+length(unique(df1$system1024))/nrow(df1)    # 237 / 642 = 0.3691589
+length(unique(df1i$system1024))/nrow(df1i)  # 197 / 435 = 0.4528736   I discovery rate for system1024
+length(unique(df1c$system1024))/nrow(df1c)  #  91 / 207 = 0.4396135   C discovery rate for system1024
+
+# 217 tries * 0.4528736 discovery rate = 98 discoveries expected - strange that the samples are higher at 113-114 discoveries
+
+# t-test
+ncatT <- t.test(ncats, mu=length(unique(dfc$system1024)))
+# lower bound on confidence interval
+round(ncatT$conf.int[[1]],2)
 
 
+############################
+# same deal for 512 systems: condition I seems to be finding more of them
+ncats <- rep(NA,500)   # total unique category systems found by that sample of 45 chains
+ntries <- rep(NA,500)  # put the total number of generations in all sampled chains here (= total tries)
+nt <- unique(df1i$trajectory)
+for (i in 1:500) {
+	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)
+	ncats[i] <- length(unique(df1i$system512[df1i$trajectory %in% samples]))
+	ntries[i] <- length(df1i$system512[df1i$trajectory %in% samples])
+}
 
+# I still finding ~20 more systems than C is
+mean(ncats) # about 95-96
+sd(ncats)   # about 9-11
+length(unique(df1c$system512)) # 75 uniques
+
+
+# alright so based on this, now I'm thinking that the I condition actually is exploring more unique systems...
