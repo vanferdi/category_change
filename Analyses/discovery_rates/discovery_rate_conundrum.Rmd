@@ -1,0 +1,134 @@
+---
+title: "Discovery rate conundrum"
+author: "Vanessa Ferdinand"
+date: "3/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import the data
+
+```{r}
+df1 <- read.csv("../../Data/experiment1_FINAL.csv", colClasses=c(system1024="character"))
+df1i <- subset(df1,condition=="I")
+df1c <- subset(df1,condition=="C")
+```
+
+
+## Discovery Rate
+
+This is a simple question: How many unique systems are found given $x$ tries?  
+
+I'm going to refer to the iterations in our experiment as "tries" - each is an attempt in which a new system could be discovered.
+
+In **condition C** there were 45 chains and together they contained `r nrow(df1c)` iterations. <br>
+These chains found `r length(unique(df1c$system1024))` unique systems in `r nrow(df1c)` tries, yielding a discovery rate of `r length(unique(df1c$system1024))/nrow(df1c)`.
+
+In **condition I** there were 90 chains and together they contained `r nrow(df1i)` iterations. <br>
+These chains found `r length(unique(df1i$system1024))` unique systems in `r nrow(df1i)` tries, yielding a discovery rate of `r length(unique(df1i$system1024))/nrow(df1i)`.
+
+These rates look similar, suggesting that the two evolutionary regimes (C and I) discover the same number of category systems on average.
+
+But let's sample 45 chains from the **I** condition a crapload of times and compute the 95% confidence intervals on the observed values above.
+
+## Confidence intervals
+
+```{r cars}
+MCMC <- function(N,subsamples) {
+	ncats <- rep(NA,N)   # total unique category systems found by the sample of 45 chains
+	ntries <- rep(NA,N)  # put the total number of generations in all sampled chains here (= total tries)
+	nt <- unique(df1i$trajectory)
+	for (i in 1:N) {
+		samples <- sample(nt,subsamples,replace=FALSE)
+		ncats[i] <- length(unique(df1i$system1024[df1i$trajectory %in% samples]))
+		ntries[i] <- length(df1i$system1024[df1i$trajectory %in% samples])
+	}
+	return(list(ncats,ntries))
+}
+
+bound95 <- function(my_list,type) {
+	sorted <- sort(my_list)
+	if (type == "lower") { result <- sorted[ceiling(length(my_list)*.025)+1] }
+	if (type == "upper") { result <- sorted[floor(length(my_list)*.925)] }
+	return(result)
+}
+```
+
+```{r}
+result <- MCMC(10000,45)
+cats <- result[[1]]
+tries <- result[[2]]
+rates <- cats/tries
+```
+
+The 95% confidence interval on the number of unique systems discovered ranges from `r bound95(cats,"lower")` to `r bound95(cats,"upper")`.  <br>
+And for the discovery rates it ranges from `r round(bound95(rates,"lower"),3)` to `r round(bound95(rates,"upper"),3)`.
+
+That puts the observed values for **C** (`r length(unique(df1c$system1024))` and `r length(unique(df1c$system1024))/nrow(df1c)`) below each of these ranges, meaning that this condition is actually discovering fewer category systems than **I** is.
+
+### A weirdness...
+
+There's something weird about these confidence intervals because not only are the **C** values lower than the range, but the observed value for **I** is way on the low end of this range too!  I've never done an MCMC confidence interval calculation that produced an observed value isn't smack in the middle of the distribution of sampled values.
+
+Here's the distribution of category systems discovered.  We sampled 45 chains from the 90 chains in **I**. If 90 chains discovered 197 systems, then the 45 chains will probably discover `r 197/2` systems (red line), but they don't! The average number of systems discovered by 45 chains randomly sampled from the **I** condition is way more.
+
+```{r echo=FALSE}
+hist(cats,col="lightblue")
+abline(v=length(unique(df1i$system1024))/2,col="red")
+```
+
+Here's the same thing for the discovery rates. The red line is the observed discovery rate in **I** shown against the distribution of sampled rates for **I**.
+
+```{r echo=FALSE}
+hist(rates,col="lightblue")
+abline(v=length(unique(df1i$system1024))/nrow(df1i),col="red")
+```
+
+
+### Sanity check
+
+Run a normal MCMC confidence interval calculation where you just resample your data with replacement (so sample 90 chains with replacement).
+
+```{r}
+MCMC2 <- function(N,subsamples) {
+	ncats <- rep(NA,N)   # total unique category systems found by the sample of 45 chains
+	ntries <- rep(NA,N)  # put the total number of generations in all sampled chains here (= total tries)
+	nt <- unique(df1i$trajectory)
+	for (i in 1:N) {
+		samples <- sample(nt,subsamples,replace=TRUE)
+		ncats[i] <- length(unique(df1i$system1024[df1i$trajectory %in% samples]))
+		ntries[i] <- length(df1i$system1024[df1i$trajectory %in% samples])
+	}
+	return(list(ncats,ntries))
+}
+
+result <- MCMC2(10000,90)
+cats <- result[[1]]
+tries <- result[[2]]
+rates <- cats/tries
+
+bound95(cats,"lower")
+bound95(cats,"upper")
+```
+
+```{r}
+hist(cats,col="lightblue")
+abline(v=length(unique(df1i$system1024)),col="red")
+```
+
+Ok so clearly we can't end up with more unique systems than the original data set by sampling from the original set.  But these values are so much lower than the number of unique systems in the data set (i.e. 197).  Is the fact that we're looking at uniqueness (which is a property of a set of numbers) making these MCMC calculations so weird? Does that mean we can't use them to calculate confidence intervals?
+
+Also this runs completely opposite to the weirdness above, where the MCMC samples were returning way higher values than you'd expect for the 45 subsampling.
+
+For the rates, we get similar results as above.
+
+```{r}
+bound95(rates,"lower")
+bound95(rates,"upper")
+hist(rates,col="lightblue")
+abline(v=length(unique(df1i$system1024))/nrow(df1i),col="red")
+```
+

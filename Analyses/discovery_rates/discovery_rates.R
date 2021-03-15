@@ -661,13 +661,15 @@ summary(lm(global_discoveries ~ tries * condition)) # there's no effect of condi
 # Number of unique category systems from 45 sampled chains in I
 ##########################################################################
 # replicate Andy's code from "data_playing.R"
+# and get a 95% confidence interval around the observed discovery rates
+# do this for the 1024 system types
  
-N <- 500
+N <- 100000
 ncats <- rep(NA,N)   # total unique category systems found by that sample of 45 chains
 ntries <- rep(NA,N)  # put the total number of generations in all sampled chains here (= total tries)
 nt <- unique(df1i$trajectory)
 for (i in 1:N) {
-	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)
+	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)  # sample 45 chains from condition I
 	ncats[i] <- length(unique(df1i$system1024[df1i$trajectory %in% samples]))
 	ntries[i] <- length(df1i$system1024[df1i$trajectory %in% samples])
 }
@@ -697,14 +699,42 @@ ncatT <- t.test(ncats, mu=length(unique(dfc$system1024)))
 # lower bound on confidence interval
 round(ncatT$conf.int[[1]],2)
 
+############################
+# 95% confidence intervals by sorting MCMC results (run for N = 10,000)
+min(ncats)  # 70
+max(ncats)  # 154
+
+# return the value at the lower or upper bound of the 95% confidence interval
+bound95 <- function(my_list,type) {
+	sorted <- sort(my_list)
+	if (type == "lower") { result <- sorted[ceiling(length(my_list)*.025)+1] }
+	if (type == "upper") { result <- sorted[floor(length(my_list)*.925)] }
+	return(result)
+}
+
+bound95(ncats,"lower")  # 94  - these stay the same with N = 100,000 runs
+bound95(ncats,"upper")  # 129
+
+# C found 91 of the 1024 systems and that's out of the confidence intervals
+length(unique(df1c$system1024))
+
+# get 95% CI on the rates also
+rates <- ncats/ntries
+bound95(rates,"lower")  # 0.4527363
+bound95(rates,"upper")  # 0.5765766
+
+# ok finally this is the answer I need to convince myself that the rates in C and I are not "the same"
+# the observed I rate is not in the middle of the 45 subsamples - it's on the low end!
+# that's why I keep getting weirded out by I finding more systems when subsampling the 45
 
 ############################
 # same deal for 512 systems: condition I seems to be finding more of them
-ncats <- rep(NA,500)   # total unique category systems found by that sample of 45 chains
-ntries <- rep(NA,500)  # put the total number of generations in all sampled chains here (= total tries)
+N <- 10000
+ncats <- rep(NA,N)   # total unique category systems found by that sample of 45 chains
+ntries <- rep(NA,N)  # put the total number of generations in all sampled chains here (= total tries)
 nt <- unique(df1i$trajectory)
-for (i in 1:500) {
-	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)
+for (i in 1:N) {
+	samples <- sample(nt,length(unique(df1c$trajectory)),replace=FALSE)  # sample 45 chains from condition I
 	ncats[i] <- length(unique(df1i$system512[df1i$trajectory %in% samples]))
 	ntries[i] <- length(df1i$system512[df1i$trajectory %in% samples])
 }
@@ -714,5 +744,11 @@ mean(ncats) # about 95-96
 sd(ncats)   # about 9-11
 length(unique(df1c$system512)) # 75 uniques
 
+bound95(ncats,"lower")  # 77
+bound95(ncats,"upper")  # 109
 
+# C found 75 of the 512 systems and that's out of the confidence intervals
+length(unique(df1c$system512))
+
+############################
 # alright so based on this, now I'm thinking that the I condition actually is exploring more unique systems...
