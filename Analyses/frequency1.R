@@ -41,7 +41,7 @@ greys <- c(25,50,75,100,125,150,175,200,225,250)
 # ex: testset 0 = greyscale 25, testset 4 = greyscale 125
 # 25 is almost black, 250 is almost white
 stim_color_rescale <- c()  # this one rescales stim color to a 0-1 range
-  
+
 stim_frequency <- c()   # frequency of the stim in the current test trial during training (normalized 0 to 1)
 L_counts <- c(10,5,4,3,2,2,1,1,1,1)  # frequency per stim in the left skew condition
 L_counts <- L_counts/sum(L_counts)
@@ -50,7 +50,7 @@ R_counts <- rev(L_counts)            # frequency per stim in the right skew cond
 # is the current stimulus on the edge of a category boundary? According to the category system people produced on that testing round.
 # uses the function defined below system_to_bounded()
 bounded <- c()          # 0 = no. Both neighbors to the stim have same category label as the stim.
-                        # 1 = yes. At least one of the neighbors to the stim had a difference category label.
+# 1 = yes. At least one of the neighbors to the stim had a difference category label.
 
 ################
 # define extra functions
@@ -88,7 +88,7 @@ system_to_bounded <- function(system_string) { # system = a string, ex: "1100000
 for (r in 1:length(df$X)) { # for each row in the original data frame (= the result of one round)
     
     dis <- df[r,]$distribution
-
+    
     # get the elements to break up per test trial in the loop below
     rts <- df[r,]$test_RTs
     sti <- df[r,]$testset
@@ -176,7 +176,7 @@ full <- glmer(bounded ~ stim_frequency * stim_color * skew * condition * iterati
 summary(full)
 
 "Fixed effects:
-                                                Estimate Std. Error z value Pr(>|z|)  
+Estimate Std. Error z value Pr(>|z|)  
 (Intercept)                                   -0.6245549  0.8936370  -0.699   0.4846  
 stim_frequency                                 3.0157247  5.3495232   0.564   0.5729  
 stim_color                                    -0.0015618  0.0053494  -0.292   0.7703  
@@ -231,7 +231,7 @@ summary(m2)
 # model also failed to converge.
 
 "Fixed effects:
-                                                Estimate Std. Error z value Pr(>|z|)
+Estimate Std. Error z value Pr(>|z|)
 (Intercept)                                   -0.6210102  0.8865394  -0.700    0.484
 stim_frequency                                 2.9489231  5.3330180   0.553    0.580
 stim_color                                    -0.0015730  0.0053345  -0.295    0.768
@@ -291,7 +291,7 @@ table(ds$stim_frequency)
 
 table(ds$bounded,ds$stim_frequency)
 "
-        0.0333  0.0666  0.1000  0.1333  0.1666  0.3333
+0.0333  0.0666  0.1000  0.1333  0.1666  0.3333
 0       999     424     254      274    229     299
 1       661     406     161      141    186     116
 "
@@ -305,7 +305,7 @@ table(ds$bounded,ds$stim_frequency)
 
 table(ds$bounded,ds$stim_color)
 "     
-    25  50  75  100 125 150 175 200 225 250  <- stim color
+25  50  75  100 125 150 175 200 225 250  <- stim color
 0   329 257 261 254 217 207 222 232 213 287  <- stim not on category boundary
 1   86  158 154 161 198 208 193 183 202 128  <- stim is on category boundary (looks non-linear with dip back down to 128 on brightest edge)
 "
@@ -337,7 +337,3 @@ m <- glmer(bounded ~ stim_frequency * stim_color * condition + (1|participant) +
 ########################################################################################
 # END
 ########################################################################################
-
-
-
-

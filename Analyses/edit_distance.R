@@ -201,50 +201,124 @@ stat_dist(b)    # 0.08228323 0.56916726 0.34854951
 
 
 ##########################
-# Experiment 1 - do the above by condition
+# Experiment 1
+
+# whole experiment
+x <- table(df1$systype_input,df1$systype_output)  # input on left, output on top
+x <- x/rowSums(x)
+"             continuous   disjoint
+continuous 0.92670157 0.07329843
+disjoint   0.21507761 0.78492239"
+stat_dist(x)
+"0.7458234 0.2541766"
 
 # condition C
 a <- table(df1c$systype_input,df1c$systype_output)  # input on left, output on top
 "             continuous disjoint
-   continuous         70        4
-   disjoint           43       90"
+   continuous         70        4     74 continuous in input
+   disjoint           43       90    133   disjoint in input 
+"   
+a <- a/rowSums(a)
+"          continuous   disjoint
+continuous 0.94594595 0.05405405
+disjoint   0.32330827 0.67669173"
 
-a/colSums(a)
-"            continuous   disjoint
-  continuous 0.61946903 0.03539823
-  disjoint   0.45744681 0.95744681"
+stat_dist(a) # stat_dist() needs rows to sum to one
+"0.8567582 0.1432418"
 
 # condition I
 b <- table(df1i$systype_input,df1i$systype_output)
 "             continuous disjoint
-   continuous        107       10
-   disjoint           54      264"
+   continuous        107       10    117 continuous in input
+   disjoint           54      264    318   disjoint in input
+"
+b <- b/rowSums(b)
+"          continuous   disjoint
+continuous 0.91452991 0.08547009
+disjoint   0.16981132 0.83018868"
 
-b/colSums(b)
+stat_dist(b)
+"0.6651927 0.3348073"
+
+# and there should be no condition difference between the TPs when calculated for generation = 1 only
+# there are gonna be like no continuous systems in input though
+table(df1ig1$systype_input) # 1 continuous
+table(df1cg1$systype_input) # 0 continous
+# so just compare the way disjoint systems transition
+
+df1ig1 <- subset(df1i,iteration==1)
+df1cg1 <- subset(df1c,iteration==1)
+c <- table(df1cg1$systype_input,df1cg1$systype_output)
+c <- c/rowSums(c)
 "             continuous  disjoint
-   continuous  0.6645963 0.0621118
-   disjoint    0.1970803 0.9635036"
+continuous                     
+disjoint    0.3777778 0.6222222"
+i <- table(df1ig1$systype_input,df1ig1$systype_output)
+i <- i/rowSums(i)
+"          continuous  disjoint
+continuous  1.0000000 0.0000000
+disjoint    0.2921348 0.7078652"
 
-# C has a larger ratio of disjoint to continuous transitions than I does
-0.45744681/(0.45744681+0.03539823)  # 0.9281757 C ratio
-0.1970803/(0.1970803+0.0621118)     # 0.7603638 I ratio
+# k well they're not identical - what the hell stats would you do on this?
 
 ##########################
 # Experiment 2
+
+# whole experiment - systype2 doesn't include degenerate - groups them as continuous
+x <- table(df2$systype2_input,df2$systype2_output)  # input on left, output on top
+x <- x/rowSums(x)
+stat_dist(x)
+"0.6497543 0.3502457" 
+
+# condition C
 a <- table(df2c$systype2_input,df2c$systype2_output)
-a/colSums(a)
-"              continuous   disjoint
-    continuous 0.60992908 0.08510638
-    disjoint   0.67073171 0.85365854"
+a <- a/rowSums(a)
+"          continuous disjoint
+continuous   0.877551 0.122449
+disjoint     0.440000 0.560000"
 
+stat_dist(a)
+"0.7822932 0.2177068"
+
+# condition I
 b <- table(df2i$systype2_input,df2i$systype2_output)
-b/colSums(b)
-"               continuous  disjoint
-     continuous  0.5607477 0.1588785
-     disjoint    0.3686275 0.8666667"
+b <- b/rowSums(b)
+"          continuous  disjoint
+continuous  0.7792208 0.2207792
+disjoint    0.2984127 0.7015873"
 
-0.67073171/(0.67073171+0.08510638)  # 0.8874013 C ratio
-0.3686275/(0.3686275+0.1588785)     # 0.698812 I ratio  - basically the same thing here
+stat_dist(b)
+"0.5747638 0.4252362"
+
+# first generation only - should be similar
+df2ig1 <- subset(df2i,iteration==1)
+df2cg1 <- subset(df2c,iteration==1)
+c <- table(df2cg1$systype2_input,df2cg1$systype2_output)
+c <- c/rowSums(c)
+"          continuous  disjoint
+continuous  1.0000000 0.0000000
+disjoint    0.2727273 0.7272727"
+i <- table(df2ig1$systype2_input,df2ig1$systype2_output)
+i <- i/rowSums(i)
+"          continuous  disjoint
+continuous                     
+disjoint    0.3222222 0.6777778"
+
+
+
+##########################################################################
+# looking at gen 1 only, we'd expect no difference in TPs between C and I
+# well the set of systems is more similar at that time across conditions...
+
+# what are the TPs for randomly answering?  it's in file random_label_flipping.R
+
+"         continous disjoint       repeats <- 1000  - took like 15 min to run?
+continous  0.201000 0.799000
+disjoint   0.008084 0.991916 "
+
+# stationary distribution: 
+"0.01001631 0.98998369"
+
 
 ##########################################################################
 # how do the 3 types change over time?
@@ -281,7 +355,7 @@ p_disjoint
 
 # plot the type of each catsys over time
 time <- seq(1,length(total))
-plot(time,p_degenerate,type="line",las=1,ylim=c(0,1),lty="dotted")
+plot(time,p_degenerate,type="l",las=1,ylim=c(0,1),lty="dotted")
 lines(time,p_continuous)
 lines(time,p_disjoint,lty="twodash")
 

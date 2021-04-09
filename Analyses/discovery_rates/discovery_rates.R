@@ -8,6 +8,13 @@ df1c <- subset(df1,condition=="C")
 df2i <- subset(df2,condition=="I")
 df2c <- subset(df2,condition=="C")
 
+jf1 <- subset(df1,iteration < 8)
+jf2 <- subset(df2,iteration < 8)
+jf1i <- subset(jf1,condition=="I")
+jf1c <- subset(jf1,condition=="C")
+jf2i <- subset(jf2,condition=="I")
+jf2c <- subset(jf2,condition=="C")
+
 ##########################################################################
 # Discovery Rate
 ##########################################################################
@@ -497,6 +504,7 @@ m1 <- glmer(local_discovery_1024 ~ iteration + (1|trajectory), data=df1, family=
 m2 <- glmer(local_discovery_1024 ~ condition + (1|trajectory), data=df1, family=binomial)
 anova(full,m1)  # full is not better, so lose condition
 anova(full,m2)  # full is sig better, so keep iteration
+best <- m1
 
 # what I think the relationship is: as iteration goes up, fewer systems are discovered
 summary(m1)
@@ -537,6 +545,28 @@ conditionI           -0.006004   0.546239  -0.011    0.991
 iteration            -0.845478   0.131147  -6.447 1.14e-10 ***
 conditionI:iteration  0.007596   0.138264   0.055    0.956 "
 # with each iteration, global discovery rate goes down
+
+##########################################################################
+# do stats on the just8
+
+# LOCAL
+full <- glmer(local_discovery_1024 ~ condition * iteration + (1|trajectory), data=jf1, family=binomial)
+m1 <- glmer(local_discovery_1024 ~ iteration + (1|trajectory), data=jf1, family=binomial)
+m2 <- glmer(local_discovery_1024 ~ iteration + (1|trajectory), data=jf1, family=binomial)
+m3 <- glmer(local_discovery_1024 ~ condition + (1|trajectory), data=jf1, family=binomial)
+anova(full,m1) # full is not better
+anova(full,m2) # lose condition
+anova(full,m3) # keep iteration
+
+# GLOBAL
+full <- glmer(global_discovery_1024 ~ condition * iteration + (1|trajectory), data=jf1, family=binomial)
+m1 <- glmer(global_discovery_1024 ~ iteration + (1|trajectory), data=jf1, family=binomial)
+m2 <- glmer(global_discovery_1024 ~ iteration + (1|trajectory), data=jf1, family=binomial)
+m3 <- glmer(global_discovery_1024 ~ condition + (1|trajectory), data=jf1, family=binomial)
+anova(full,m1) # full is not better
+anova(full,m2) # lose condition
+anova(full,m3) # keep iteration
+
 
 ##########################################################################
 # make new dataframe for plotting - stick to the 1024 systems
@@ -726,6 +756,10 @@ bound95(rates,"upper")  # 0.5765766
 # ok finally this is the answer I need to convince myself that the rates in C and I are not "the same"
 # the observed I rate is not in the middle of the 45 subsamples - it's on the low end!
 # that's why I keep getting weirded out by I finding more systems when subsampling the 45
+# but this is also weird because I've never run MCMC confidence intervals where the observed mean wasn't smack in the middle of the distribution of samples!
+
+hist(rates)
+abline(v=0.4528736,col="red")
 
 ############################
 # same deal for 512 systems: condition I seems to be finding more of them
