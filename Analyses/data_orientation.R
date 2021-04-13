@@ -1,8 +1,7 @@
 # this file contains basic info about the data and descriptives
 
-df1 <- read.csv("../Data/experiment1_FINAL.csv")
-df2 <- read.csv("../Data/experiment2_FINAL.csv")
-
+df1 <- readRDS("../Data/experiment1.rds")
+df2 <- readRDS("../Data/experiment2.rds")
 
 # number of participants
 length(unique(df1$participant))     # 297 in experiment 1
@@ -61,10 +60,9 @@ table(df1i$duration_experiment/60000)
 table(df2c$duration_experiment/60000)
 table(df2i$duration_experiment/60000)
 
-# btw I couldn't use df2$whole_experiment coz there was an error in line 692
-subset(df2,whole_experiment=="whole_experiment")
+# btw I couldn't use df2$duration_experiment_minutes coz there was an error in line 692
 # here's the fix (floored minutes from 372715/60000)
-df2[692,]$whole_experiment <- 6
+df2[692,]$duration_experiment_minutes <- 6
 
 # 8 rounds of the I condition experiment was designed to take less than 1 hours
 # so participants who took over an hour must have taken a break.

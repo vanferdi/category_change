@@ -1,5 +1,5 @@
-df1 <- read.csv("../Data/experiment1_FINAL.csv")
-df2 <- read.csv("../Data/experiment2_FINAL.csv")
+df1 <- readRDS("../Data/experiment1.rds")
+df2 <- readRDS("../Data/experiment2.rds")
 
 df1c <- subset(df1,condition=="C")
 df1i <- subset(df1,condition=="I")

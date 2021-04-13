@@ -10,7 +10,7 @@
 # 1) READ IN DATA
 ########################################################################################
 
-df <- read.csv("../Data/experiment1_FINAL.csv")
+df <- readRDS("../Data/experiment1.rds")
 
 # subset to just look at the first 8 iterations
 # there were just a couple iterations in the cultural condition that went over 8
@@ -85,7 +85,7 @@ system_to_bounded <- function(system_string) { # system = a string, ex: "1100000
 ################
 # fill columns
 
-for (r in 1:length(df$X)) { # for each row in the original data frame (= the result of one round)
+for (r in 1:length(df$participant)) { # for each row in the original data frame (= the result of one round)
     
     dis <- df[r,]$distribution
     
@@ -102,7 +102,7 @@ for (r in 1:length(df$X)) { # for each row in the original data frame (= the res
     for (s in 1:10) { # for each stimulus in the testing set
         
         # use as.character() to keep these as factors - otherwise they convert to numerics
-        lineage <- c(lineage,as.character(df[r,]$trajectory)) 
+        lineage <- c(lineage,as.character(df[r,]$lineage)) 
         participant <- c(participant, as.character(df[r,]$participant))
         condition <- c(condition, as.character(df[r,]$condition))
         iteration <- c(iteration, df[r,]$iteration)

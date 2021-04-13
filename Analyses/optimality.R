@@ -1,7 +1,7 @@
 require(lme4)
 
-d1 <- readRDS("./experiment1.rds")
-d2 <- readRDS("./experiment2.rds")
+d1 <- readRDS("../Data/experiment1.rds")
+d2 <- readRDS("../Data/experiment2.rds")
 
 # restrict analyses to the first 8 iterations
 d1 <- subset(d1,iteration < 9)
@@ -163,6 +163,8 @@ I  8  4 11
 C  4  2  4
 "
 
+# more degenerate systems in I and R
+
 s[order(s$iteration)] # sort dataframe by iteration
 
 # look at each lineage
@@ -170,7 +172,7 @@ for (i in unique(s$lineage)) {
     print(subset(s,lineage==i)$system1024)
 }
 
-# what's up withthe 1-gen chains?
+# what's up with the 1-gen chains?
 
 #######################################################################
 # create Figure X in paper
@@ -232,19 +234,19 @@ d11 <- subset(d1,N_boundaries==1) # 266 systems with 1 boundary
 d11$distribution <- relevel(d11$distribution, ref="U") # make the uniform frequency condition the reference point
 d11$condition <- relevel(d11$condition, ref="C")
 
-full <- lmer(HUmass ~ distribution * condition * iteration + (1|trajectory), data=d11, REML=FALSE)
-reduce1 <- lmer(HUmass ~ distribution * condition + iteration + (1|trajectory), data=d11, REML=FALSE)
-reduce2 <- lmer(HUmass ~ distribution + condition * iteration + (1|trajectory), data=d11, REML=FALSE)
-reduce3 <- lmer(HUmass ~ distribution + condition + iteration + (1|trajectory), data=d11, REML=FALSE)
+full <- lmer(HUmass ~ distribution * condition * iteration + (1|lineage), data=d11, REML=FALSE)
+reduce1 <- lmer(HUmass ~ distribution * condition + iteration + (1|lineage), data=d11, REML=FALSE)
+reduce2 <- lmer(HUmass ~ distribution + condition * iteration + (1|lineage), data=d11, REML=FALSE)
+reduce3 <- lmer(HUmass ~ distribution + condition + iteration + (1|lineage), data=d11, REML=FALSE)
 anova(full,reduce1) # full wins
 anova(full,reduce2) # full wins
 anova(full,reduce3) # full wins
 
-r1 <- lmer(HUmass ~ distribution * condition + (1|trajectory), data=d11, REML=FALSE)
+r1 <- lmer(HUmass ~ distribution * condition + (1|lineage), data=d11, REML=FALSE)
 anova(full,r1) # full wins
-r2 <- lmer(HUmass ~ distribution * iteration + (1|trajectory), data=d11, REML=FALSE)
+r2 <- lmer(HUmass ~ distribution * iteration + (1|lineage), data=d11, REML=FALSE)
 anova(full,r2) # full wins 
-r3 <- lmer(HUmass ~ condition * iteration + (1|trajectory), data=d11, REML=FALSE)
+r3 <- lmer(HUmass ~ condition * iteration + (1|lineage), data=d11, REML=FALSE)
 anova(full,r3) # full wins 
 
 summary(full)
@@ -262,6 +264,8 @@ conditionI:iteration                0.04588    0.01188   3.861
 distributionL:conditionI:iteration -0.05685    0.01710  -3.324
 distributionR:conditionI:iteration -0.06933    0.01813  -3.824"
 
+# freakin everythang matters
+
 
 # boundary locations
 require(stringr)
@@ -273,7 +277,7 @@ for (i in 1:nrow(d11)) {
 
 d11 <- cbind(d11,bound_location)
 
-
+##########################################################
 # distribution L
 s <- subset(d11,distribution=="L")
 mean(s$Hmass) # 0.6360488
@@ -294,6 +298,18 @@ mean(s$Hmass) # 0.7209378
 table(s$bound_location)/sum(table(s$bound_location))
 " 1  2  3  4  5  6  7  8  9 
   3  6 10  8 17 20 11  6  5 "
+
+s <- subset(d11,condition=="C")
+mean(s$Hmass) # 0.7437855
+table(s$bound_location)/sum(table(s$bound_location))
+" 1  2  3  4  5  6  7  8  9 
+  1  4 16 14 26 20 13  5  6"
+
+s <- subset(d11,condition=="I")
+mean(s$Hmass) # 0.7738392
+table(s$bound_location)/sum(table(s$bound_location))
+" 1  2  3  4  5  6  7  8  9 
+  4  9  8 21 36 30 30 20  3"
 
 as.vector(table(s$bound_location)/sum(table(s$bound_location)))
 

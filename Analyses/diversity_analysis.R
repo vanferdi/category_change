@@ -59,6 +59,13 @@ boundaries_landscape_pmf <- boundaries_landscape/sum(boundaries_landscape)
 # all examples below will be calculated using this data
 demo_df <- read.csv("./experiment1_data_just8.csv")
 
+#########################
+# this block added after pre-registration:
+# here's the data to run this on
+#demo_df <- subset(readRDS("../Data/experiment1.rds"),iteration < 9)
+#demo_df <- subset(readRDS("../Data/experiment2.rds"),iteration < 9)
+#########################
+
 # load support libraries and functions
 library(entropy) # for entropy estimators
 

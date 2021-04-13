@@ -1,5 +1,5 @@
-df1 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment1_FINAL.csv")
-df2 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment2_FINAL.csv")
+df1 <- readRDS("../Data/experiment1.rds")
+df2 <- readRDS("../Data/experiment2.rds")
 
 a <- "1111100000"
 b <- "1011100000" # 1 change
@@ -328,18 +328,18 @@ d <- df1
 iter1 <- subset(d,iteration==1)
 # initialize with the input to iteration 1
 iter1 <- subset(d,iteration==1) #table(iter1$systype_input)
-total <- c(length(iter1$X)) # total number of systems (use for normalizing each p)
-p_degenerate <- c(length(subset(iter1,systype_input=="degenerate")$X))
-p_continuous <- c(length(subset(iter1,systype_input=="continuous")$X))
-p_disjoint <- c(length(subset(iter1,systype_input=="disjoint")$X))
+total <- c(length(iter1$participant)) # total number of systems (use for normalizing each p)
+p_degenerate <- c(length(subset(iter1,systype_input=="degenerate")$participant))
+p_continuous <- c(length(subset(iter1,systype_input=="continuous")$participant))
+p_disjoint <- c(length(subset(iter1,systype_input=="disjoint")$participant))
 
 # now use the output systems
 for (i in 1:max(d$iteration)) {
 	iter <- subset(d,iteration==i)
-	total <- c(total,length(iter$X))
-	p_degenerate <- c(p_degenerate,length(subset(iter,systype_input=="degenerate")$X))
-	p_continuous <- c(p_continuous,length(subset(iter,systype_input=="continuous")$X))
-	p_disjoint <- c(p_disjoint,length(subset(iter,systype_input=="disjoint")$X))
+	total <- c(total,length(iter$participant))
+	p_degenerate <- c(p_degenerate,length(subset(iter,systype_input=="degenerate")$participant))
+	p_continuous <- c(p_continuous,length(subset(iter,systype_input=="continuous")$participant))
+	p_disjoint <- c(p_disjoint,length(subset(iter,systype_input=="disjoint")$participant))
 }
 	
 # sanity check that these all equal the total

@@ -1,8 +1,8 @@
 require(ggplot2)
 library(tidyverse) # gives you pipe %>%
 
-df1 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment1_FINAL.csv")
-df2 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment2_FINAL.csv")
+df1 <- readRDS("../Data/experiment1.rds")
+df2 <- readRDS("../Data/experiment2.rds")
 
 # look at all possible category system schemas
 # particular label is important (ex: AB and BA are 2 systems): 1024 systems
@@ -16,7 +16,7 @@ df2 <- read.csv("/Users/vanferdi/Library/Mobile Documents/com~apple~CloudDocs/Re
 
 k <- seq(0,9)
 uniques <- choose(9,k)
-sum(count) # 512 - sanity check
+#sum(count) # 512 - sanity check
 
 # how many of these are hit up in the C and I conditions respectively?
 
