@@ -1,4 +1,5 @@
 require(lme4)
+require(ggplot2)
 
 d1 <- readRDS("../Data/experiment1.rds")
 d2 <- readRDS("../Data/experiment2.rds")
@@ -266,60 +267,217 @@ distributionR:conditionI:iteration -0.06933    0.01813  -3.824"
 
 # freakin everythang matters
 
+# Experiment 2 replication
+d21 <- subset(d2,N_boundaries==1) # 266 systems with 1 boundary
 
-# boundary locations
+d21$distribution <- relevel(d21$distribution, ref="U") # make the uniform frequency condition the reference point
+d21$condition <- relevel(d21$condition, ref="C")
+
+full <- lmer(HUmass ~ distribution * condition * iteration + (1|lineage), data=d21, REML=FALSE)
+reduce1 <- lmer(HUmass ~ distribution * condition + iteration + (1|lineage), data=d21, REML=FALSE)
+reduce2 <- lmer(HUmass ~ distribution + condition * iteration + (1|lineage), data=d21, REML=FALSE)
+reduce3 <- lmer(HUmass ~ distribution + condition + iteration + (1|lineage), data=d21, REML=FALSE)
+anova(full,reduce1) # full wins
+anova(full,reduce2) # full wins
+anova(full,reduce3) # full wins
+
+summary(full)
+"Estimate Std. Error t value
+(Intercept)                         0.9614095  0.0392289  24.508
+distributionL                      -0.0697083  0.0513997  -1.356
+distributionR                      -0.0422546  0.0624259  -0.677
+conditionI                         -0.0381885  0.0521384  -0.732
+iteration                          -0.0053979  0.0080969  -0.667
+distributionL:conditionI            0.1311589  0.0673098   1.949
+distributionR:conditionI            0.0441562  0.0771043   0.573
+distributionL:iteration             0.0148055  0.0100920   1.467
+distributionR:iteration            -0.0007485  0.0142884  -0.052
+conditionI:iteration                0.0032928  0.0105839   0.311
+distributionL:conditionI:iteration -0.0336615  0.0134620  -2.500
+distributionR:conditionI:iteration  0.0021496  0.0169592   0.127"
+
+
+# Check if R and L optimality is going up?
+
+# is optimality for the respective distribution going up over time?
+# U should be at ceiling, but the other two could be going up if they're optimizing
+u1 <- subset(d11,distribution=="U")
+plot(jitter(u1$iteration),jitter(u1$Hmass),las=1)
+abline(lm(u1$Hmass~u1$iteration)) # goes down over time
+
+r1 <- subset(d11,distribution=="R")
+plot(jitter(r1$iteration),jitter(r1$Hmass),las=1)
+abline(lm(r1$Hmass~r1$iteration)) # basically flat
+
+l1 <- subset(d11,distribution=="L")
+plot(jitter(l1$iteration),jitter(l1$Hmass),las=1)
+abline(lm(l1$Hmass~l1$iteration)) # goes way down
+
+# re-plot with lmer intercept and slope
+# U
+d11$distribution <- relevel(d11$distribution, ref="U")
+summary(lmer(HUmass ~ distribution * condition * iteration + (1|lineage), data=d11, REML=FALSE))
+plot(jitter(u1$iteration),jitter(u1$Hmass),las=1)
+abline(1.08698,-0.04751)
+
+# R
+d11$distribution <- relevel(d11$distribution, ref="R")
+summary(lmer(HUmass ~ distribution * condition * iteration + (1|lineage), data=d11, REML=FALSE))
+plot(jitter(r1$iteration),jitter(r1$Hmass),las=1)
+abline(0.8955231,-0.0006964)
+
+# L
+d11$distribution <- relevel(d11$distribution, ref="L")
+summary(lmer(HUmass ~ distribution * condition * iteration + (1|lineage), data=d11, REML=FALSE))
+plot(jitter(l1$iteration),jitter(l1$Hmass),las=1)
+abline(0.961370,-0.014921)
+
+# Experiment 2
+u2 <- subset(d21,distribution=="U")
+plot(jitter(u2$iteration),jitter(u2$Hmass),las=1)
+abline(lm(u2$Hmass~u2$iteration)) 
+
+r2 <- subset(d21,distribution=="R")
+plot(jitter(r2$iteration),jitter(r2$Hmass),las=1)
+abline(lm(r2$Hmass~r2$iteration)) 
+
+l2 <- subset(d21,distribution=="L")
+plot(jitter(l2$iteration),jitter(l2$Hmass),las=1)
+abline(lm(l2$Hmass~l2$iteration)) 
+
+#######################################################################
+# plot boundary locations for continuous systems
+#######################################################################
+
+# compute boundary locations
 require(stringr)
-bound_location <- c()
-for (i in 1:nrow(d11)) {
-    loc <- str_count(d11$system512[i],"1")
-    bound_location <- c(bound_location,loc)
+
+d11 <- subset(d1,N_boundaries==1) 
+d21 <- subset(d2,N_boundaries==1) 
+
+compute_bound_locations <- function(df) {
+    bound_location <- c()
+    for (i in 1:nrow(df)) {
+        loc <- str_count(df$system512[i],"1") # in system512, # of 1's = boundary location
+        bound_location <- c(bound_location,loc)
+    }
+    df <- cbind(df,bound_location)
+    return(df)
 }
 
-d11 <- cbind(d11,bound_location)
+d11 <- compute_bound_locations(d11)
+d21 <- compute_bound_locations(d21)
 
-##########################################################
-# distribution L
-s <- subset(d11,distribution=="L")
-mean(s$Hmass) # 0.6360488
-table(s$bound_location)/sum(table(s$bound_location))
-" 1  2  3  4  5  6  7  8  9 
-  0  4  4 16 16 12 20  8  2 "
+# make dataframe
+mytable <- function(array,range_start,range_stop) {
+    return(table(factor(array, levels = range_start:range_stop)))
+}
 
-# distribution U
-s <- subset(d11,distribution=="U")
-mean(s$Hmass) # 0.9033566
-table(s$bound_location)/sum(table(s$bound_location))
-" 1  2  3  4  5  6  7  8  9 
-  2  3 10 11 29 18 12 11  2"
+bars <- function(df,U_name,L_name,R_name) {
+    s <- subset(df,distribution=="U" & condition=="C")
+    UC1 <-data.frame(mytable(s$bound_location,1,9))
+    s <- subset(df,distribution=="U" & condition=="I")
+    UI1 <-data.frame(mytable(s$bound_location,1,9))
+    s <- subset(df,distribution=="L" & condition=="C")
+    LC1 <-data.frame(mytable(s$bound_location,1,9))
+    s <- subset(df,distribution=="L" & condition=="I")
+    LI1 <-data.frame(mytable(s$bound_location,1,9))
+    s <- subset(df,distribution=="R" & condition=="C")
+    RC1 <-data.frame(mytable(s$bound_location,1,9))
+    s <- subset(df,distribution=="R" & condition=="I")
+    RI1 <-data.frame(mytable(s$bound_location,1,9))
+    
+    Dist <- c(rep(U_name,nrow(UC1)*2),rep(L_name,nrow(UC1)*2),rep(R_name,nrow(UC1)*2))
+    Cond <- rep(c(rep("cultural",nrow(UC1)),rep("individual",nrow(UC1))),3)
+    
+    d <- data.frame(Cond,Dist,rbind(UC1,UI1,LC1,LI1,RC1,RI1))
+    return(d)
+}
 
-# distribution R
-s <- subset(d11,distribution=="R")
-mean(s$Hmass) # 0.7209378
-table(s$bound_location)/sum(table(s$bound_location))
-" 1  2  3  4  5  6  7  8  9 
-  3  6 10  8 17 20 11  6  5 "
-
-s <- subset(d11,condition=="C")
-mean(s$Hmass) # 0.7437855
-table(s$bound_location)/sum(table(s$bound_location))
-" 1  2  3  4  5  6  7  8  9 
-  1  4 16 14 26 20 13  5  6"
-
-s <- subset(d11,condition=="I")
-mean(s$Hmass) # 0.7738392
-table(s$bound_location)/sum(table(s$bound_location))
-" 1  2  3  4  5  6  7  8  9 
-  4  9  8 21 36 30 30 20  3"
-
-as.vector(table(s$bound_location)/sum(table(s$bound_location)))
+d11bar <- bars(d11,"uniform","dark skew","light skew")
+d21bar <- bars(d21,"uniform","purple skew","blue skew")
 
 
+# plot all continous systems
+p1 <- ggplot(data=d11bar, aes(x=Var1, y=Freq)) +
+    geom_bar(stat="identity") +
+    labs(x="\n\n\nlocation of category boundary", y="number of systems") +
+    ylim(0,80) +
+    ggtitle("Experiment 1") + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(plot.margin=unit(c(0,0.5,0,0),"cm")) # top,right,bottom,left
+p1
+
+p2 <- ggplot(data=d21bar, aes(x=Var1, y=Freq)) +
+    geom_bar(stat="identity") +
+    labs(x="\n\n\nlocation of category boundary", y="") +
+    ggtitle("Experiment 2") + 
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(plot.margin=unit(c(0,0.5,0,0),"cm")) 
+p2
+
+ggsave(filename = "barsall_Exp1.png", p1, width = 4, height = 4, dpi = 300, units = "in", device='png')
+ggsave(filename = "barsall_Exp2.png", p2, width = 4, height = 4, dpi = 300, units = "in", device='png')
 
 
+# 6-panel plot broken down by distribution and condition
+p3 <- ggplot(data=d11bar, aes(x=Var1, y=Freq)) +
+    geom_bar(stat="identity") +
+    facet_grid(Cond ~ Dist) +
+    labs(x="location of category boundary", y="number of systems") +
+    ggtitle("Experiment 1") + 
+    theme(plot.title = element_text(hjust = 0.5)) # center the title
+p3
+
+# change order of columns in the grid
+d21bar$Dist = factor(d21bar$Dist, levels=c("purple skew","blue skew","uniform"))
+
+p4 <- ggplot(data=d21bar, aes(x=Var1, y=Freq)) +
+    geom_bar(stat="identity") +
+    facet_grid(Cond ~ Dist) +
+    labs(x="location of category boundary", y="") +
+    ggtitle("Experiment 2") + 
+    theme(plot.title = element_text(hjust = 0.5))
+p4
+
+ggsave(filename = "bars_Exp1.png", p3, width = 4, height = 4, dpi = 300, units = "in", device='png')
+ggsave(filename = "bars_Exp2.png", p4, width = 4, height = 4, dpi = 300, units = "in", device='png')
 
 
+# look at mean boundary location in each combo of conditions
 
+uc1 <- subset(d11,distribution=="U" & condition=="C")
+ui1 <- subset(d11,distribution=="U" & condition=="I")
+lc1 <- subset(d11,distribution=="L" & condition=="C")
+li1 <- subset(d11,distribution=="L" & condition=="I")
+rc1 <- subset(d11,distribution=="R" & condition=="C")
+ri1 <- subset(d11,distribution=="R" & condition=="I")
 
+uc2 <- subset(d21,distribution=="U" & condition=="C")
+ui2 <- subset(d21,distribution=="U" & condition=="I")
+lc2 <- subset(d21,distribution=="L" & condition=="C")
+li2 <- subset(d21,distribution=="L" & condition=="I")
+rc2 <- subset(d21,distribution=="R" & condition=="C")
+ri2 <- subset(d21,distribution=="R" & condition=="I")
+
+mean(rc1$bound_location)  # 5         # light
+mean(uc1$bound_location)  # 5.366667
+mean(lc1$bound_location)  # 5.324324  # dark
+
+mean(ri1$bound_location)  # 5.458333  # light
+mean(ui1$bound_location)  # 5.352941
+mean(li1$bound_location)  # 5.8       # dark
+
+mean(lc2$bound_location)  # 4.45283   # purple
+mean(uc2$bound_location)  # 4.25641
+mean(rc2$bound_location)  # 4.37931   # blue
+
+mean(li2$bound_location)  # 5.405063  # purple
+mean(ui2$bound_location)  # 5.369565
+mean(ri2$bound_location)  # 4.878788  # blue
+
+# these means aren't in the right direction anyway
+# if there's any signal in here, all we can see is noise with this sample size.
 
 
 
