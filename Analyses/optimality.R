@@ -200,8 +200,7 @@ p2 <- ggplot(d1, aes(x=distribution, y=Hmass)) +
 ggsave(filename = "optimality_uniform.png", p1, width = 4, height = 3, dpi = 300, units = "in", device='png')
 ggsave(filename = "optimality_actual.png", p2, width = 4, height = 3, dpi = 300, units = "in", device='png')
 
-#######################################################################
-# check plot for Experiment 2
+# Experiment 2
 
 # colors are different in Experiment 2, its a blue-purple gradient
 # i=1 is the purplest and i=10 is the bluest
@@ -268,7 +267,7 @@ distributionR:conditionI:iteration -0.06933    0.01813  -3.824"
 # freakin everythang matters
 
 # Experiment 2 replication
-d21 <- subset(d2,N_boundaries==1) # 266 systems with 1 boundary
+d21 <- subset(d2,N_boundaries==1) # 312 systems with 1 boundary
 
 d21$distribution <- relevel(d21$distribution, ref="U") # make the uniform frequency condition the reference point
 d21$condition <- relevel(d21$condition, ref="C")
@@ -295,6 +294,130 @@ distributionR:iteration            -0.0007485  0.0142884  -0.052
 conditionI:iteration                0.0032928  0.0105839   0.311
 distributionL:conditionI:iteration -0.0336615  0.0134620  -2.500
 distributionR:conditionI:iteration  0.0021496  0.0169592   0.127"
+
+
+# now do under the correct distribution
+full <- lmer(Hmass ~ distribution * condition * iteration + (1|lineage), data=d11, REML=FALSE)
+reduce1 <- lmer(Hmass ~ distribution * condition + iteration + (1|lineage), data=d11, REML=FALSE)
+reduce2 <- lmer(Hmass ~ distribution + condition * iteration + (1|lineage), data=d11, REML=FALSE)
+reduce3 <- lmer(Hmass ~ distribution + condition + iteration + (1|lineage), data=d11, REML=FALSE)
+anova(full,reduce1) # full wins
+anova(full,reduce2) # full wins
+anova(full,reduce3) # full wins
+
+summary(full)
+"                                   Estimate Std. Error t value
+(Intercept)                         1.09312    0.06609  16.539
+distributionL                      -0.27560    0.08775  -3.141
+distributionR                      -0.30967    0.09264  -3.343
+conditionI                         -0.19585    0.07944  -2.466
+iteration                          -0.04918    0.01253  -3.926
+distributionL:conditionI            0.22271    0.11314   1.968
+distributionR:conditionI            0.15514    0.11393   1.362
+distributionL:iteration             0.01736    0.01668   1.041
+distributionR:iteration             0.02777    0.01835   1.514
+conditionI:iteration                0.04799    0.01420   3.379
+distributionL:conditionI:iteration -0.07250    0.02053  -3.531
+distributionR:conditionI:iteration -0.02193    0.02172  -1.010"
+
+full <- lmer(Hmass ~ distribution * condition * iteration + (1|lineage), data=d21, REML=FALSE)
+reduce1 <- lmer(Hmass ~ distribution * condition + iteration + (1|lineage), data=d21, REML=FALSE)
+reduce2 <- lmer(Hmass ~ distribution + condition * iteration + (1|lineage), data=d21, REML=FALSE)
+reduce3 <- lmer(Hmass ~ distribution + condition + iteration + (1|lineage), data=d21, REML=FALSE)
+anova(full,reduce1) # full wins
+anova(full,reduce2) # lose interaction at p = 0.06392
+anova(full,reduce3) # full wins
+
+reduce4 <- lmer(Hmass ~ condition + iteration + (1|lineage), data=d21, REML=FALSE)
+reduce5 <- lmer(Hmass ~ distribution + iteration + (1|lineage), data=d21, REML=FALSE)
+reduce6 <- lmer(Hmass ~ distribution + condition + (1|lineage), data=d21, REML=FALSE)
+anova(full,reduce4) # keep distribution
+anova(full,reduce5) # lose condition at p = 0.0559 .
+anova(full,reduce6) # keep iteration
+
+inter5 <- lmer(Hmass ~ distribution * iteration + (1|lineage), data=d21, REML=FALSE)
+anova(inter5,reduce5)
+
+best <-reduce5
+summary(best)
+"               Estimate Std. Error t value
+(Intercept)    0.987646   0.031793  31.064
+distributionL -0.233159   0.038184  -6.106
+distributionR -0.263500   0.039915  -6.602
+iteration     -0.016567   0.003533  -4.690"
+
+summary(full)
+"                                    Estimate Std. Error t value
+(Intercept)                         0.963616   0.054127  17.803
+distributionL                      -0.207774   0.071784  -2.894
+distributionR                      -0.269336   0.088254  -3.052
+conditionI                         -0.040578   0.072901  -0.557
+iteration                          -0.006016   0.009976  -0.603
+distributionL:conditionI            0.080703   0.094614   0.853
+distributionR:conditionI            0.111271   0.109114   1.020
+distributionL:iteration            -0.002224   0.012423  -0.179
+distributionR:iteration            -0.012667   0.019010  -0.666
+conditionI:iteration                0.004379   0.013020   0.336
+distributionL:conditionI:iteration -0.031486   0.016584  -1.899
+distributionR:conditionI:iteration -0.008176   0.022115  -0.370"
+
+
+#######################################################################
+# create Figure X in paper
+
+p1 <- ggplot(d11, aes(x=distribution, y=HUmass)) +
+    geom_violin() +
+    stat_summary(fun.y=median, geom="point", size=2) +
+    ylim(0,1) +
+    xlab("frequency condition") +
+    ylab("optimality \n under a uniform distribution") +
+    scale_x_discrete(labels=c("uniform","dark skew","light skew"))
+
+p2 <- ggplot(d11, aes(x=distribution, y=Hmass)) +
+    geom_violin() +
+    stat_summary(fun.y=median, geom="point", size=2) +
+    ylim(0,1) +
+    xlab("frequency condition") +
+    ylab("optimality \n under the correct distribution") +
+    scale_x_discrete(labels=c("uniform","dark skew","light skew"))
+
+ggsave(filename = "optimality_uniform_singles.png", p1, width = 4, height = 3, dpi = 300, units = "in", device='png')
+ggsave(filename = "optimality_actual_singles.png", p2, width = 4, height = 3, dpi = 300, units = "in", device='png')
+
+# Experiment 2
+
+# colors are different in Experiment 2, its a blue-purple gradient
+# i=1 is the purplest and i=10 is the bluest
+
+p1 <- ggplot(d21, aes(x=distribution, y=HUmass)) +
+    geom_violin() +
+    stat_summary(fun.y=median, geom="point", size=2) +
+    ylim(0,1) +
+    xlab("frequency condition") +
+    ylab("optimality \n under a uniform distribution") +
+    scale_x_discrete(labels=c("uniform","purple skew","blue skew"))
+
+p2 <- ggplot(d21, aes(x=distribution, y=Hmass)) +
+    geom_violin() +
+    stat_summary(fun.y=median, geom="point", size=2) +
+    ylim(0,1) +
+    xlab("frequency condition") +
+    ylab("optimality \n under the correct distribution") +
+    scale_x_discrete(labels=c("uniform","purple skew","blue skew"))
+
+ggsave(filename = "optimality_uniform_singles_Exp2.png", p1, width = 4, height = 3, dpi = 300, units = "in", device='png')
+ggsave(filename = "optimality_actua_singlesl_Exp2.png", p2, width = 4, height = 3, dpi = 300, units = "in", device='png')
+######################################################################################
+
+
+
+
+
+
+
+
+
+
 
 
 # Check if R and L optimality is going up?
@@ -443,7 +566,56 @@ p4
 ggsave(filename = "bars_Exp1.png", p3, width = 4, height = 4, dpi = 300, units = "in", device='png')
 ggsave(filename = "bars_Exp2.png", p4, width = 4, height = 4, dpi = 300, units = "in", device='png')
 
+######################################################################################
+# calulate skew and kurtosis
+require("moments")
+skewness(d11bar$Freq) # 0.9236969  moderate skew
+kurtosis(d11bar$Freq) # 3.658913
 
+skewness(d21bar$Freq) # 1.092105
+kurtosis(d21bar$Freq) # 3.258279
+
+# skewness between -0.5 and 0.5, data is fairly symmetrical
+# up to -1 or 1 is moderate and larger than -1 or 1 is strong skewness
+
+# kurtosis of a normal distribution = 3
+# kurtosis > 3 means a distribution has heavier tails than the normal distribution
+
+uc1 <- subset(d11bar,Dist=="uniform" & Cond=="cultural")
+ui1 <- subset(d11bar,Dist=="uniform" & Cond=="individual")
+lc1 <- subset(d11bar,Dist=="dark skew" & Cond=="cultural")
+li1 <- subset(d11bar,Dist=="dark skew" & Cond=="individual")
+rc1 <- subset(d11bar,Dist=="light skew" & Cond=="cultural")
+ri1 <- subset(d11bar,Dist=="light skew" & Cond=="individual")
+
+uc2 <- subset(d21bar,Dist=="uniform" & Cond=="cultural")
+ui2 <- subset(d21bar,Dist=="uniform" & Cond=="individual")
+lc2 <- subset(d21bar,Dist=="purple skew" & Cond=="cultural")
+li2 <- subset(d21bar,Dist=="purple skew" & Cond=="individual")
+rc2 <- subset(d21bar,Dist=="blue skew" & Cond=="cultural")
+ri2 <- subset(d21bar,Dist=="blue skew" & Cond=="individual")
+
+skewness(uc1$Freq)  # 1.279401   light skew
+skewness(ui1$Freq)  # 0.4364344  no skew
+skewness(lc1$Freq)  # -0.0082    no skew
+skewness(li1$Freq)  # 0.3173207  no skew
+skewness(rc1$Freq)  # 0.5506595  light skew
+skewness(ri1$Freq)  # 0.5191305  light skew
+
+var(uc1$Freq) # culture has lower variance than individual
+var(ui1$Freq)
+
+skewness(uc2$Freq)  # 1.578724  blue skew
+skewness(ui2$Freq)  # 0.884026  blue skew
+skewness(lc2$Freq)  # 0.348843  no skew
+skewness(li2$Freq)  # 0.706134  blue skew
+skewness(rc2$Freq)  # 1.098968  blue skew
+skewness(ri2$Freq)  # 0.597544  blue skew
+
+var(uc2$Freq) 
+var(ui2$Freq)
+
+######################################################################################
 # look at mean boundary location in each combo of conditions
 
 uc1 <- subset(d11,distribution=="U" & condition=="C")
@@ -478,6 +650,214 @@ mean(ri2$bound_location)  # 4.878788  # blue
 
 # these means aren't in the right direction anyway
 # if there's any signal in here, all we can see is noise with this sample size.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#######################################################################
+# color analysis - creates a different data frame
+#######################################################################
+
+# create a new dataframe (called c1) from d1 - each row is a stimulus
+
+
+################
+# define extra functions
+
+# input: a category system in string format (see df$system512)
+# ex: "1100000001" where 0 = category A label, like "lem", 1 = category B label, like "vit"
+# the order of the 10 labels map on to the greyscale color of each stim, defined in variable "greys" above.
+
+# output: a different binary string format where
+# 0 = stim has no boundary adjacent to it, 1 = stim has boundary adjacent
+# example output for the input above: "0110000011"
+
+system_to_bounded <- function(system_string) { # system = a string, ex: "1100000001"
+    result <- c() # result is an indexable array of binary digits
+    s <- as.numeric(strsplit(system_string, split="")[[1]])
+    
+    m <- length(s)
+    # if the two labels are the same, assign 0. If the two lables are different, assign 1.
+    if ( s[1] == s[2] ) { result[1] <- 0 } else { result[1] <- 1 } # first one
+    if ( s[m] == s[m-1] ) { result[m] <- 0 } else { result[m] <- 1 } # last one
+    
+    # if the three labels are the same, assign 0.  Otherwise, assign 1.
+    for (j in 2:(m-1)) { # the ones in the middle
+        if ( s[j] == s[j-1] && s[j] == s[j+1] ) { result[j] <- 0 } else { result[j] <- 1 }
+    }
+    return(result)
+}
+
+# example usage:
+# system_to_bounded("1100000001")
+
+################
+# fill columns
+
+create_colors_df <- function(df) {
+    # define what the columns are gonna be
+    iteration <- c()        # generation (cultural condition) or round (individual condition) - this is the "age" of the category system
+    participant <- c()      # unique participant ID
+    lineage <- c()          # unique ID of the chain 
+    skew <- c()             # S = one of the skewed frequency distributions, U = the uniform one
+    condition <- c()        # C = cultural, I = individual
+    trial <- c()            # test trial number (ranges 1 through 10)
+    RT <-c()                # time spent on the current test trial stim in milliseconds
+    stim_color <- c()       # greyscale code of the image in the current test trial
+    # df$testset values map to this array of greyscale colors:
+    greys <- c(25,50,75,100,125,150,175,200,225,250)
+    # ex: testset 0 = greyscale 25, testset 4 = greyscale 125
+    # 25 is almost black, 250 is almost white
+    stim_color_rescale <- c()  # this one rescales stim color to a 0-1 range
+    # greys above won't matter once we rescale color, so no need to separately define "blues" for Exp 2
+    
+    stim_frequency <- c()   # frequency of the stim in the current test trial during training (normalized 0 to 1)
+    L_counts <- c(10,5,4,3,2,2,1,1,1,1)  # frequency per stim in the left skew condition
+    L_counts <- L_counts/sum(L_counts)
+    R_counts <- rev(L_counts)            # frequency per stim in the right skew condition
+    
+    # is the current stimulus on the edge of a category boundary? According to the category system people produced on that testing round.
+    # uses the function defined below system_to_bounded()
+    bounded <- c()          # 0 = no. Both neighbors to the stim have same category label as the stim.
+    # 1 = yes. At least one of the neighbors to the stim had a difference category label.
+    
+    
+    for (r in 1:length(df$participant)) { # for each row in the original data frame (= the result of one round)
+        
+        dis <- df[r,]$distribution
+        
+        # get the elements to break up per test trial in the loop below
+        rts <- df[r,]$test_RTs
+        sti <- df[r,]$testset
+        
+        # then break them up into an indexable array
+        rts <- as.numeric(strsplit(toString(rts),",")[[1]])
+        sti <- as.numeric(strsplit(toString(sti),",")[[1]])
+        
+        bounded_codes <- system_to_bounded(toString(df[r,]$system512))
+        
+        for (s in 1:10) { # for each stimulus in the testing set
+            
+            # use as.character() to keep these as factors - otherwise they convert to numerics
+            lineage <- c(lineage,as.character(df[r,]$lineage)) 
+            participant <- c(participant, as.character(df[r,]$participant))
+            condition <- c(condition, as.character(df[r,]$condition))
+            iteration <- c(iteration, df[r,]$iteration)
+            trial <- c(trial,s)
+            
+            if (dis == "U") { skew <- c(skew, "U") } else { skew <- c(skew, "S") }
+            
+            RT <- c(RT, rts[s])
+            stim_color <- c(stim_color, greys[sti[s]+1]) # +1 coz testset starts at zero
+            
+            # work out what the stim frequency was
+            if (dis == "L") { fre <- L_counts[sti[s]+1] }
+            if (dis == "R") { fre <- R_counts[sti[s]+1] }
+            if (dis == "U") { fre <- 3/30 }
+            stim_frequency <- c(stim_frequency, fre)
+            
+            # pull out the bounded code
+            bounded <- c(bounded, bounded_codes[sti[s]+1])
+        }
+    }
+    
+    # re-scale color from range 25-250 to 0-1
+    stim_color_rescale <- (stim_color-25)/225
+    # summary(stim_color_rescale)
+    
+    cf <- data.frame(lineage,iteration,participant,trial,stim_color,stim_color_rescale,stim_frequency,RT,bounded,skew,condition)
+    
+    # make sure everything you want to be a factor is a factor
+    #d$participant <- as.factor(d$participant)
+    
+    d$bounded <- as.factor(d$bounded)
+    
+    return(cf)
+}
+
+c1 <- create_colors_df(d1)  # nrow(c1) 6330 rows (i.e. stimuli)
+c2 <- create_colors_df(d2)  # nrow(c2) 6810 rows
+
+
+#######################################################################
+# color stats
+#######################################################################
+
+# at the most basic level, I just want to know if/how stim_frequency and stim_color affect bounded
+
+m0 <- glmer(bounded ~ condition * stim_frequency * stim_color_rescale + (1|participant) + (1|lineage), data=c1, family="binomial")
+summary(m0)
+
+m1 <- glmer(bounded ~ stim_frequency * stim_color_rescale + (1|participant) + (1|lineage), data=c1, family="binomial")
+summary(m1)
+"                                  Estimate Std. Error z value Pr(>|z|)
+(Intercept)                        -0.4826     0.1094  -4.412 1.02e-05
+stim_frequency                     -3.0907     0.6958  -4.442 8.92e-06
+stim_color_rescale                  0.2473     0.1538   1.608   0.1079
+stim_frequency:stim_color_rescale   2.1041     1.0667   1.972   0.0486
+"
+
+# higher frequency and brighter color make a category boundary more likely
+# also a brighter color on its own makes a boundary more likely
+# but frequency in its own repels boundaries!
+
+m2 <- glmer(bounded ~ stim_frequency + stim_color_rescale + (1|participant) + (1|lineage), data=c1, family="binomial")
+anova(m1,m2) # k full model is sig best
+"m1  6 8045.4 8086.0 -4016.7   8033.4 3.9124      1    0.04793 *"
+
+m1 <- glmer(bounded ~ stim_frequency * stim_color_rescale + (1|participant) + (1|lineage), data=c2, family="binomial")
+summary(m1)
+"                                  Estimate Std. Error z value Pr(>|z|)
+(Intercept)                       -0.08874    0.10471  -0.847   0.3967
+stim_frequency                    -6.58866    0.80713  -8.163 3.27e-16
+stim_color_rescale                -0.26688    0.15751  -1.694   0.0902
+stim_frequency:stim_color_rescale  1.69694    1.24433   1.364   0.1727"
+
+m2 <- glmer(bounded ~ stim_frequency + stim_color_rescale + (1|participant) + (1|lineage), data=c2, family="binomial")
+anova(m1,m2) # lose the interaction
+m3 <- glmer(bounded ~ stim_color_rescale + (1|participant) + (1|lineage), data=c2, family="binomial")
+anova(m3,m2) # keep frequency
+m4 <- glmer(bounded ~ stim_frequency + (1|participant) + (1|lineage), data=c2, family="binomial")
+anova(m4,m2) # lose color
+m5 <- glmer(bounded ~ 1 + (1|participant) + (1|lineage), data=c2, family="binomial")
+anova(m5,m4) # keep frequency
+
+best <- m4
+"               Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    -0.22582    0.06583   -3.43 0.000603 ***
+stim_frequency -5.71485    0.46770  -12.22  < 2e-16 ***"
+
+# proportion of bounded to not, by frequency
+tc1 <- table(c1$stim_frequency,c1$bounded)
+cbind(tc1,tc1[,2]/(tc1[,1]+tc1[,2]))
+
+tc2 <- table(c2$stim_frequency,c2$bounded)
+cbind(tc2,table(c2$stim_frequency,c2$bounded)[,2]/table(c2$stim_frequency,c2$bounded)[,1])
+
+# is the lower freq = more likely to have a boundary due just because there are more low freq items?
+# I thought lmers took care of different numbers of observations, for sure.
+
+
+summary(glmer(bounded ~ condition * stim_frequency * stim_color_rescale + (1|participant) + (1|lineage), data=c1, family="binomial"))
+summary(glmer(bounded ~ condition * stim_frequency * stim_color_rescale + (1|participant) + (1|lineage), data=c2, family="binomial"))
+
 
 
 
