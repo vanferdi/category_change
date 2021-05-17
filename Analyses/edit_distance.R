@@ -1,13 +1,16 @@
 df1 <- readRDS("../Data/experiment1.rds")
 df2 <- readRDS("../Data/experiment2.rds")
 
+# macmini
+df1 <- readRDS("/Users/vferdinand/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment1.rds")
+df2 <- readRDS("/Users/vferdinand/Library/Mobile Documents/com~apple~CloudDocs/Research/PROJECTS/Category Change/GITHUB REPO/Data/experiment2.rds")
+
 a <- "1111100000"
 b <- "1011100000" # 1 change
 c <- "0111100001" # 2 changes
 d <- "1101011101" # 6 changes
 
 # Levenshtein distance function is adist()
-# will just give the number of labels that flipped
 adist(a,b)
 adist(a,c)
 adist(a,d)
@@ -17,11 +20,29 @@ a <- df1$system512[1]
 b <- df1$system512[6]
 adist(a,b)
 
+e <- "0111110001"
+f <- "1100000110"
+adist(e,f) # answer is 6, so this isn't the raw label flips!
+
+# here's what it's actually doing:
+drop(attr(adist(e, f, counts = TRUE), "counts"))
+
+# make another function to compute the raw flips
+diffs <- function(string1,string2) {
+    a <- strsplit(string1, split = "")[[1]]
+    b <- strsplit(string2, split = "")[[1]]
+    ans <- length(a==b)-sum(a==b)
+    return(ans)
+}
+# example usage:
+diffs(e,f) # 8
+
 # get edit distance for each pair of input-output systems in the data
 get_edits_512 <- function(d) {
 	edits <- c()
 	for (i in 1:nrow(d)) {
-		edit <- adist(d$system512_input[i],d$system512[i])
+		#edit <- adist(d$system512_input[i],d$system512[i]) # comment in to use Levenshtein distance
+		edit <- diffs(d$system512_input[i],d$system512[i]) # comment in to use raw # differences
 		#print(d$system512_input[i])
 		#print(d$system512[i])
 		#print(edit)
@@ -31,32 +52,43 @@ get_edits_512 <- function(d) {
 }
 
 # append new column to each dataframe - contains the number of label flips (edits) between input and output 512 system
-edits <- get_edits_512(df1)
-df1 <- cbind(df1,edits)
-edits <- get_edits_512(df2)
-df2 <- cbind(df2,edits)
+edits512 <- get_edits_512(df1)
+df1 <- cbind(df1,edits512)
+edits512 <- get_edits_512(df2)
+df2 <- cbind(df2,edits512)
+
+
+#####################################
+# Does it have to use the 1024 system or are the answers the same anyway using the 512 system?
+# Answers are different for 1024.
+
+get_edits_1024 <- function(d) {
+	edits <- c()
+	for (i in 1:nrow(d)) {
+		#edit <- adist(d$system1024_input[i],d$system1024[i])
+		edit <- diffs(d$system1024_input[i],d$system1024[i])
+		edits <- c(edits,edit)
+	}
+	return(edits)
+}
+
+# SANITY CHECK
+table(get_edits_512(df1)==get_edits_1024(df1)) # 600 were the same number of edits, but 42 were different!
+table(get_edits_512(df2)==get_edits_1024(df2)) # 609 same, 83 different
+
+edits1024 <- get_edits_1024(df1)
+df1 <- cbind(df1,edits1024)
+edits1024 <- get_edits_1024(df2)
+df2 <- cbind(df2,edits1024)
 
 df1c <- subset(df1,condition=="C")
 df1i <- subset(df1,condition=="I")
 df2c <- subset(df2,condition=="C")
 df2i <- subset(df2,condition=="I")
 
+
 #####################################
-# Does it have to use the 1024 system or are the answers the same anyway using the 512 system?
-get_edits_1024 <- function(d) {
-	edits <- c()
-	for (i in 1:nrow(d)) {
-		edit <- adist(d$system1024_input[i],d$system1024[i])
-		edits <- c(edits,edit)
-	}
-	return(edits)
-}
-e1 <- get_edits_512(df1)
-e2 <- get_edits_1024(df1)
-# ah crap that style of answer doesn't work because the 1024 systems initial zeros are removed!
-cbind(e1,e2,df1$system1024)
-
-
+# everything with variable name "edits" below was for the 512 Levenstein edits
 #####################################
 # Which systems showed zero edits? These should be fairly stable systems.  124 systems
 subset(df1,edits==0)$system512
@@ -116,6 +148,57 @@ table(df1$N_boundaries,df1$edits)
 
 # TO DO - plot the table above nicely
 
+##########################################################################
+# redo section above for the raw number of edits512 and edits1024
+
+# Which systems showed zero edits? These should be fairly stable systems.  124 systems (same as above)
+subset(df1,edits512==0)$system512
+
+table(subset(df1,edits512==0)$system512,subset(df1,edits512==0)$edits512)
+# ranking is the same as above
+
+# check 1024 systems and edits also
+table(subset(df1,edits1024==0)$system1024,subset(df1,edits1024==0)$edits1024)
+# similar - but easier to visualize the top x systems with 512
+
+# check for Experiment 2
+table(subset(df2,edits512==0)$system512,subset(df2,edits512==0)$edits512)
+table(subset(df2,edits1024==0)$system1024,subset(df2,edits1024==0)$edits1024)
+
+##########################################################################
+# stability in C vs I
+
+table(subset(df1i,edits512==0)$system512,subset(df1i,edits512==0)$edits512)
+" top 5 in I, Experiment 1
+1111100000 9
+1111111000 8
+1111111100 8
+1111000000 6
+1111110000 6
+"
+
+table(subset(df1c,edits512==0)$system512,subset(df1c,edits512==0)$edits512)
+" top 4 in C, Experiment 1
+1111100000 10
+1110000000  7
+1111110000  7
+1111111000  4
+"
+
+table(subset(df2i,edits512==0)$system512,subset(df2i,edits512==0)$edits512)
+" top 4 in I, Experiment 2
+1111000000 19
+1111100000  9
+1111110000  9
+1111111111  9
+"
+
+table(subset(df2c,edits512==0)$system512,subset(df2c,edits512==0)$edits512)
+" top 3 in C, Experiment 2
+1111000000 11
+1111100000 11
+1110000000  9
+"
 
 ##########################################################################
 # what are the TPs among N_boundaries?
@@ -380,6 +463,108 @@ df <- df1
 # for each system type, get % input-output pairs that were stable
 
 all_system_types <- unique(df$system512)
+
+
+
+##########################################################################
+# size of evolutionary steps
+##########################################################################
+
+# Experiment 1
+mean(df1c$edits1024)  # 1.97 in C
+mean(df1i$edits1024)  # 2.13 in I
+
+# Experiment 2
+mean(df2c$edits1024)  # 2.26 in C
+mean(df2i$edits1024)  # 2.35 in I
+
+hist(df1c$edits1024, col="lightblue", las=1) # both are basically identical
+hist(df1i$edits1024, col="lightblue", las=1)
+
+hist(df2c$edits1024, col="lightblue", las=1)
+hist(df2i$edits1024, col="lightblue", las=1)
+
+######################
+require(lme4)
+
+# Experiment 1
+full1 <- lmer(edits1024 ~ condition * iteration + (1|lineage), data=df1)
+r1 <- lmer(edits1024 ~ condition + iteration + (1|lineage), data=df1)
+anova(full1,r1) # full is almost better, but not  p = 0.06859
+
+r2 <- lmer(edits1024 ~ iteration + (1|lineage), data=df1)
+anova(r1,r2) # lose condition
+
+r3 <- lmer(edits1024 ~ condition + (1|lineage), data=df1)
+anova(r1,r3) # keep iteration
+
+
+# Experiment 2
+full2 <- lmer(edits1024 ~ condition * iteration + (1|lineage), data=df2)
+r1 <- lmer(edits1024 ~ condition + iteration + (1|lineage), data=df2)
+anova(full2,r1) # full is not better  p = 0.8492
+
+r2 <- lmer(edits1024 ~ iteration + (1|lineage), data=df2)
+anova(r1,r2) # lose condition
+
+r3 <- lmer(edits1024 ~ condition + (1|lineage), data=df2)
+anova(r1,r3) # keep iteration
+
+# compare both of the full models
+summary(full1)
+"                     Estimate Std. Error t value
+(Intercept)           2.96085    0.22342  13.252
+conditionI            0.51358    0.27708   1.854
+iteration            -0.33833    0.04958  -6.824
+conditionI:iteration -0.11438    0.06285  -1.820
+"
+summary(full2)
+"                     Estimate Std. Error t value
+(Intercept)           3.56616    0.22744  15.679
+conditionI            0.02246    0.28322   0.079
+iteration            -0.41264    0.04686  -8.805
+conditionI:iteration  0.01118    0.05941   0.188
+"
+# they yield different interpretations coz interaction direction is different
+
+######################
+
+
+require(ggplot2)
+
+p <- ggplot(df1, aes(x=iteration, y=edits1024, group=condition, color=condition)) +
+	geom_point()
+p
+
+# compute standard error
+ste <- function(data) {
+	sd(data)/sqrt(length(data))
+}
+
+# get mean edit distance of a dataframe over time
+gettem <- function(df) {
+	means <- c()
+	stes <- c()
+	for (i in 1:8) {
+		means <- c(means,mean(subset(df,iteration==i)$edits1024))
+		stes <- c(stes,ste(subset(df,iteration==i)$edits1024))
+	}
+	return(list(means,stes))
+}
+
+result <- gettem(df1c)
+C1_means <- result[[1]]
+C1_stes <- result[[2]]
+result <- gettem(df1i)
+I1_means <- result[[1]]
+I1_stes <- result[[2]]
+
+# make df for ggplot
+
+
+
+
+
 
 
 

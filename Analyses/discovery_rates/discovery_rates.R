@@ -60,6 +60,52 @@ unique(setdiff(df1c$system512,df1i$system512))    #  29 systems in C that are no
 # visually, they look like a smattering of the same thing
 # but do they differ by their number of boundaries?
 
+#############
+# hmm we better do this for a 45 subsample of the I chains though
+# 1024 systems
+nt <- unique(df1i$lineage)
+
+a <- c()
+b <- c()
+c <- c()
+d <- c()
+I_set_size <- c()
+C_set_size <- c()
+for (i in 1:1000) {
+	samples <- sample(nt,45,replace=FALSE)  # sample 45 chains from condition I
+	df1i_45set <- df1i$system1024[df1i$lineage %in% samples]
+	length(df1i_45set) # will be different set size every time you run it ~ 210-240
+	# use one close to 207 coz C has 207 systems
+	
+	a <- c(a,length(intersect(df1i_45set,df1c$system1024)))
+	b <- c(b,length(setdiff(df1i_45set,df1c$system1024)))
+	c <- c(c,length(setdiff(df1c$system1024,df1i_45set)))
+	d <- c(d,length(unique(df1i_45set)))
+	
+	I_set_size <- c(I_set_size,length(df1i_45set))
+	C_set_size <- c(C_set_size,length(df1c$system1024))
+}
+
+# how many uniques are in I?
+length(unique(x))               # 118
+# how many uniques are in C?
+length(unique(df1c$system1024)) # 91
+
+# what systems are in both C and I?
+intersect(x,df1c$system1024) # 33
+mean(a) # 35
+
+# what is only in I?
+setdiff(x,df1c$system1024) # 85
+mean(b) # 79
+
+# what is only in C?
+setdiff(df1c$system1024,x) # 58
+mean(c) # 55
+
+
+#############
+
 get_n_boundaries <- function(systems) {
     require(stringr)
     boundaries01 <- str_count(systems, pattern = "01")
@@ -786,3 +832,49 @@ length(unique(df1c$system512))
 
 ############################
 # alright so based on this, now I'm thinking that the I condition actually is exploring more unique systems...
+
+
+################################################
+# get percent local reinventions per iteration
+
+table(subset(df1c,iteration==8)$local_discovery_1024)
+table(subset(df1i,iteration==8)$local_discovery_1024)
+
+c1_all <- as.vector(table(df1c$iteration))[1:8] # all chains still going at each iteration
+c1_news <- c(45,32,33,18,14,10,7,5) # number of current systems that are novel
+c1_olds <- c(0,13,10,6,6,4,4,2)     # number that are reinventions
+
+round(c1_olds/c1_all,2) # proportion of reinventions
+"0.00 0.29 0.31 0.25 0.30 0.29 0.36 0.29"
+
+i1_all <- as.vector(table(df1i$iteration)) # all chains still going at each iteration
+i1_news <- c(90,78,56,34,24,16,15,8) # number of current systems that are novel
+i1_olds <- c(0,12,22,29,17,16,7,11)     # number that are reinventions
+
+round(i1_olds/i1_all,2) # proportion of reinventions
+"0.00 0.13 0.28 0.46 0.41 0.50 0.32 0.58"
+
+c1prs <- c1_olds/c1_all
+i1prs <- i1_olds/i1_all
+
+mean(c1prs)  # 0.2608067
+mean(i1prs)  # 0.3359332
+
+
+
+################################################
+# PLOT percent local reinventions per iteration
+
+require(ggplot2)
+
+d <- data.frame(iter=rep(seq(1,8),2),yval=c(c1prs,i1prs),type=c(rep("C",8),rep("I",8)))
+
+p <- ggplot(d, aes(x=iter, y=yval, group=type, color=type)) +
+    geom_line() + geom_point()
+p
+
+
+
+
+
+
